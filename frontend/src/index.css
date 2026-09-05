@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@theme {
+  --font-sans: "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+}
+body { margin: 0; background: #f6f6f6; color: #1a1a1a; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid #404040; outline-offset: 3px; }
