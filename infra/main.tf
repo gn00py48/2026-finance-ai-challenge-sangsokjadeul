@@ -119,7 +119,7 @@ resource "aws_security_group" "app" {
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "HTTP (ACME 및 HTTPS 리다이렉트)"
+    description = "HTTP for ACME challenge and HTTPS redirect"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
