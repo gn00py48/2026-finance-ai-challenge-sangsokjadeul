@@ -1,8 +1,8 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최신 인수인계 기준: 2026-09-07 Figma 전수 대조 및 UI 재작업 종료 시점.
-1차 작업은 PR #13으로 `dev`에 병합됐다(병합 커밋 `44722b1`). 나머지 7개 화면의 좌표 대조 결과는
-브랜치 `fix/figma-coord-remaining`에서 PR #14로 열려 있으며 아직 병합 전이다.
+PR #13과 #14는 `dev`에 병합됐다. 마지막 작업인 내 로드맵(C3) 재작성은 브랜치 `fix/figma-roadmap-c3`에서
+PR #15로 열려 있으며 아직 병합 전이다.
 운영 배포는 하지 않았다. 아래 2026-09-06 절은 그 이전 작업 기록이며 이미 `dev`에 병합되어 있다.
 
 ## 최신 작업 요약 — 먼저 읽을 내용
@@ -513,10 +513,16 @@ Figma에도 나열되어 있지 않다. API-1을 결정할 때 쓸 수 있다.
 - `f4d214d` fix: 나머지 7개 화면의 좌표 대조 결과를 반영 — B1·F1·F2·G1·H2·B9·J1 (PR #14)
 - `6536328` docs: HANDOFF에 좌표 대조 커밋과 PR 링크 추가 (PR #14)
 - `1e6ff33` docs: PR 13 병합과 PR 14 분리 상황을 HANDOFF에 반영 (PR #14)
-- `2420576` fix: 내 로드맵 화면을 Figma C3 구성으로 재작성 (PR #14)
+- `2420576` fix: 내 로드맵 화면을 Figma C3 구성으로 재작성 (PR #15)
+- `237bb67` docs: 대조 방법의 한계와 C3 사례를 HANDOFF에 남김 (PR #15)
 
-앞의 세 커밋은 [PR #13](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/13)으로 `dev`에
-병합됐다(병합 커밋 `44722b1`). 나머지는 병합 시점 이후에 만들어져 #13에 들어가지 못했고,
-[PR #14](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/14)로 따로 열었다.
+PR은 세 번에 나눠 열렸다. 커밋을 만드는 도중에 앞 PR이 병합되면서, 병합 이후에 만든 커밋이
+그 PR에 들어가지 못했기 때문이다.
+
+| PR | 커밋 | 상태 |
+| --- | --- | --- |
+| [#13](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/13) | `4574aee` `6b4898c` `d2b941f` | 병합됨 (`44722b1`) |
+| [#14](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/14) | `f4d214d` `6536328` `1e6ff33` | 병합됨 (`28aaec3`) |
+| [#15](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/15) | `2420576` `237bb67` | 열림 |
 
 `dev` push 시 CI가 GHCR 이미지를 만들지만 EC2 반영은 별개다. 운영 반영 절차는 `docs/deployment.md`와 `deploy/`를 따른다.
