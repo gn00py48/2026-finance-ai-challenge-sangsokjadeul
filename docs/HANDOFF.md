@@ -1,8 +1,9 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최종 갱신: 2026-09-06  
-기준 브랜치: `dev`. 열린 PR 없음. PR #2(MVP), #3(S3·마스킹·refresh token·로드맵 이관·배포 구성),
-#4(배포 중 발견한 TLS 부트스트랩 수정), #5(COMMON-04 챗봇 예외 처리)가 모두 머지되었다.
+기준 브랜치: `dev`. PR #2(MVP), #3(S3·마스킹·refresh token·로드맵 이관·배포 구성),
+#4(배포 중 발견한 TLS 부트스트랩 수정), #5(COMMON-04 챗봇 예외 처리),
+#6(HANDOFF 갱신), #7(UI)이 머지되었다. WARN-01 공식 링크 노출 PR이 열려 있다.
 
 **운영 배포됨: https://sangsokjadeul.duckdns.org** — `dev` 최신 코드가 반영되어 있다. 상세는 아래 "운영 배포 현황".
 
@@ -50,7 +51,7 @@ git diff --stat
 | INFO-01~04 | 내 상속 정보 | 완료 | info/edit pages, `GET /api/documents/{id}/file` | 없음 |
 | EDIT-01~02 | 통합 수정·영향 검사 | 완료 | edit/financial APIs | 영향 설명 세분화 |
 | TASK-01~03 | 단계 상세·결과·취소 | 완료 | roadmap controller/pages | 단계 유형별 결과 폼 세분화 |
-| WARN-01 | 전체 주의사항 | 부분 구현 | warning API/page | 필터 UI 및 공식 링크 관리 |
+| WARN-01 | 전체 주의사항 | 완료 | warning API/page | 필터는 카테고리 6칩, 공식 링크는 warning의 관련 step에서 상속 |
 | COMMON-04 | AI 챗봇 화면 바로가기 | 완료 | `chat`, `OpenAiChatService`, floating chat | 사건 요약 컨텍스트 확대 |
 | AUTH | 가입·로그인·JWT·소유권 | 완료 | `auth`, `SecurityConfig` | 없음 (refresh token 회전·폐기 구현) |
 
@@ -180,8 +181,7 @@ SSM 파라미터, Session Manager, 예산 알림, IAM, 보안그룹은 무료다
    검증 전까지 운영은 `AI_PROVIDER=mock`으로 둔다.
 2. 마스킹 검증 후 OpenAI 실키로 전환하고 PDF/PNG 라이브 E2E 확인.
 3. 단계 유형별 결과 입력 폼. 현재 `resultText`가 "사용자 입력"으로 하드코딩되어 있다.
-4. WARN-01 주의사항 필터 UI와 공식 링크 관리.
-5. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
+4. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
 
 ### 자주 묻는 것
 

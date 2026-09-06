@@ -142,7 +142,7 @@ public final class Models {
     public static class Warning {
         @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
         @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="case_id") private InheritanceCase inheritanceCase;
-        @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="step_id") private RoadmapStep step;
+        @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="step_id") private RoadmapStep step;
         @Enumerated(EnumType.STRING) @Column(nullable=false) private Enums.WarningCategory category;
         @Enumerated(EnumType.STRING) @Column(nullable=false) private Enums.WarningLevel level;
         @Column(nullable=false) private String title;
