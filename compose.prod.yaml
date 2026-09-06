@@ -20,6 +20,7 @@ services:
   backend:
     image: ${BACKEND_IMAGE:?required}
     restart: unless-stopped
+    labels: ["com.centurylinklabs.watchtower.enable=true"]
     env_file: [.env]
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -43,6 +44,7 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:?required}
     restart: unless-stopped
+    labels: ["com.centurylinklabs.watchtower.enable=true"]
     environment:
       DOMAIN: ${DOMAIN:?required}
     ports:
@@ -69,6 +71,18 @@ services:
       - certbot_www:/var/www/certbot
     entrypoint: /bin/sh
     command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+  # GHCR의 :latest 태그가 갱신되면 backend, frontend를 자동으로 다시 pull하고 재기동한다.
+  # dev 머지 → CI가 이미지 push → 여기서 60초 이내 감지.
+  # 라벨(com.centurylinklabs.watchtower.enable=true)이 붙은 컨테이너만 대상으로 한다.
+  # SSM 파라미터(.env)가 바뀔 때는 여전히 deploy.sh를 수동으로 돌려야 한다.
+  # ponytail: 폴링 60초, GitHub 웹훅 트리거가 필요하면 diun+webhook로 교체.
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 60 --cleanup --label-enable
 
 volumes:
   postgres_data:

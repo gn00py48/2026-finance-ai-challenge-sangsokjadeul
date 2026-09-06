@@ -154,10 +154,15 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app -v "$HOME/.m2":/va
 aws ssm start-session --target i-05c15888efd92d75d   # AWS_PROFILE 지정 필요
 sudo -iu ubuntu && cd /opt/sangsok
 
-./deploy/deploy.sh                    # SSM에서 .env를 다시 만들고 이미지 pull 후 재기동
+./deploy/deploy.sh                    # .env 재생성이나 compose 변경이 있을 때만 필요
 docker compose -f compose.prod.yaml ps
 docker compose -f compose.prod.yaml logs -f backend
 ```
+
+**코드 배포는 자동이다.** `dev` 브랜치가 갱신되면 GitHub Actions가 GHCR에 새 이미지(`:latest`)를
+올리고, EC2의 `watchtower` 컨테이너가 60초 간격으로 감지해 `backend`, `frontend` 컨테이너를 다시
+pull하고 재기동한다. `deploy.sh`는 SSM 파라미터가 바뀌었거나 `compose.prod.yaml` 자체가 바뀌었을
+때만 수동으로 돌린다.
 
 설정값은 SSM Parameter Store `/sangsok/*`에 있다. 바꾸려면 파라미터를 `--overwrite`로 갱신한 뒤
 `deploy.sh`를 다시 실행한다. 서버의 `.env`를 직접 고치면 다음 배포에서 덮어써진다.
