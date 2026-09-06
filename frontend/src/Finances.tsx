@@ -16,11 +16,11 @@ export default function Finances() {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [changed, setChanged] = useState(false);
   const q = useQuery({ queryKey: ['items', caseId], queryFn: () => apiRequest<FinancialItem[]>(`cases/${caseId}/financial-items`) });
   const items = q.data ?? [];
-  const matches = (x: FinancialItem, key: string) => key === 'ALL' || (key === 'UNKNOWN' ? x.amountStatus === 'NEEDS_CONFIRMATION' : key === 'OUTSIDE' ? x.itemType === 'REAL_ESTATE' : x.assetOrDebt === key);
+  const matches = (x: FinancialItem, key: string) => key === 'ALL' || (key === 'UNKNOWN' ? x.amountStatus === 'NEEDS_CONFIRMATION' : key === 'OUTSIDE' ? x.itemType === 'REAL_ESTATE' : key === 'AI' ? Boolean(x.sourceDocumentId) : key === 'MANUAL' ? !x.sourceDocumentId : x.assetOrDebt === key);
   async function refresh() { setChanged(true); await qc.invalidateQueries(); }
   return <>
     <button className="link finance-add" onClick={() => setEditing('new')}>＋ 추가</button>
-    <div className="chips filters" aria-label="재산·채무 필터">{[['ALL', '전체'], ['ASSET', '재산'], ['DEBT', '채무'], ['UNKNOWN', '미확인'], ['OUTSIDE', '범위 밖']].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {items.filter(x => matches(x, key)).length}</button>)}</div>
+    <div className="chips filters" aria-label="재산·채무 필터">{[['ALL', '전체'], ['ASSET', '재산'], ['DEBT', '채무'], ['AI', 'AI 추출'], ['MANUAL', '직접 입력'], ['UNKNOWN', '미확인'], ['OUTSIDE', '범위 밖']].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {items.filter(x => matches(x, key)).length}</button>)}</div>
     {changed && <Banner>저장된 정보를 로드맵에도 반영해 주세요.<button className="link" onClick={() => nav(`/cases/${caseId}/dashboard`)}>로드맵으로 이동 →</button></Banner>}
     {items.some(x => x.amountStatus === 'NEEDS_CONFIRMATION') && <Banner><b>금액 미확인 항목이 있어요</b><p>금액을 확인하기 전까지 다음 단계가 제한될 수 있어요. 확인한 금액은 직접 입력할 수 있습니다.</p></Banner>}
     {q.isPending && <Loading />}{q.isError && <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>}

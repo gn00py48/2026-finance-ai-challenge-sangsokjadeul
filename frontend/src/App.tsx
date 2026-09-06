@@ -87,6 +87,16 @@ export default function App() {
         }
       />
       <Route
+        path="/cases/:caseId/data/new"
+        element={
+          <Guard>
+            <Shell>
+              <AddData />
+            </Shell>
+          </Guard>
+        }
+      />
+      <Route
         path="/cases/:caseId/documents/upload"
         element={
           <Guard>
@@ -260,7 +270,7 @@ function Shell({ children }: { children: ReactNode }) {
     nav = useNavigate();
   const { pathname } = useLocation();
   const screen = pathname.includes('/tasks/') ? 'task' : pathname.endsWith('/documents/upload') ? 'upload' : pathname.split('/').at(-1) || 'dashboard';
-  const titles: Record<string, string> = { 'financial-items': '재산·채무 현황', documents: '분석 결과 확인', upload: '상속자료 추가', roadmap: '내 로드맵', task: '절차 상세', info: '내 상속 정보', edit: '상속 정보 수정', warnings: '전체 주의사항' };
+  const titles: Record<string, string> = { 'financial-items': '재산·채무 현황', documents: '분석 결과 확인', new: '상속자료 추가', upload: '문서 업로드', roadmap: '내 로드맵', task: '절차 상세', info: '내 상속 정보', edit: '상속 정보 수정', warnings: '전체 주의사항' };
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return (
     <div className={`app app--${screen}`}>
@@ -273,7 +283,7 @@ function Shell({ children }: { children: ReactNode }) {
           <img src={`${import.meta.env.BASE_URL}assets/compass.svg`} alt="" />상속 나침반
         </button>
         <nav>
-          <button onClick={() => nav(`/cases/${p.caseId}/documents/upload`)}>
+          <button onClick={() => nav(`/cases/${p.caseId}/data/new`)}>
             상속자료 추가
           </button>
           <button onClick={() => nav(`/cases/${p.caseId}/info`)}>
@@ -295,6 +305,7 @@ function Dashboard() {
   const p = useParams(),
     nav = useNavigate();
   const [recalculate, setRecalculate] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [changes, setChanges] = useState('');
+  const [picked, setPicked] = useState<FinancialItem | null>(null), [editing, setEditing] = useState<FinancialItem | null>(null);
   const qc = useQueryClient();
   const roadRef = useRef<HTMLDivElement>(null);
   const caseQuery = useQuery({ queryKey: ['case', p.caseId], queryFn: () => apiRequest<CaseInfo>(`cases/${p.caseId}`) });
@@ -362,7 +373,14 @@ function Dashboard() {
         <div className="road-legend"><span>완료</span><span>현재</span><span>예정</span></div>
         <p className="muted">단계는 결과 입력으로만 완료됩니다</p>
       </Section>
-      <Section className="checklist-card" t="먼저 확인할 것" action={() => nav(`/cases/${p.caseId}/financial-items`)}>{items.data?.filter(x => x.amountStatus === 'NEEDS_CONFIRMATION').map(x => <button className="checklist-row row" key={x.id} onClick={() => nav(`/cases/${p.caseId}/financial-items`)}><span>{x.institution || itemLabels[x.itemType]}<small className="muted">금액 확인 필요</small></span><span aria-hidden="true">›</span></button>)}{items.data && !items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION') && <p className="muted">미확인 금액이 없습니다.</p>}</Section>
+      <Section className="checklist-card" t="먼저 확인할 것" action={() => nav(`/cases/${p.caseId}/financial-items`)}>{items.data?.filter(x => x.amountStatus === 'NEEDS_CONFIRMATION').map(x => <button className="checklist-row row" key={x.id} onClick={() => setPicked(x)}><span>{x.institution || itemLabels[x.itemType]}<small className="muted">금액 확인 필요</small></span><span aria-hidden="true">›</span></button>)}{items.data && !items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION') && <p className="muted">미확인 금액이 없습니다.</p>}</Section>
+      {picked && <Sheet title={picked.institution || itemLabels[picked.itemType]} close={() => setPicked(null)}>
+        <p className="muted">금액이 확인되지 않은 항목입니다. 어떻게 확인할까요?</p>
+        <button className="primary" onClick={() => { setEditing(picked); setPicked(null); }}>금액 직접 입력</button>
+        <button className="secondary" onClick={() => nav(`/cases/${p.caseId}/data/new`)}>자료 등록하기</button>
+        {d.priorityTask?.id && <button className="secondary" onClick={() => nav(`/cases/${p.caseId}/tasks/${d.priorityTask.id}`)}>관련 단계 보기</button>}
+      </Sheet>}
+      {editing && <Sheet title="금액 입력" close={() => setEditing(null)}><FinancialForm initial={editing} cancel={() => setEditing(null)} save={async data => { await apiRequest(`financial-items/${editing.id}`, { method: 'PATCH', ...jsonBody(data) }); setEditing(null); await qc.invalidateQueries(); }} /></Sheet>}
       <div className="two">
         <Metric
           n={d.needsConfirmationCount}
@@ -389,6 +407,37 @@ function Dashboard() {
   );
 }
 
+// Figma H1. 업로드/재산/채무 3분기. 직접 추가는 B10 공용 시트를 그대로 쓴다.
+function AddData() {
+  const p = useParams(), nav = useNavigate(), qc = useQueryClient();
+  const [adding, setAdding] = useState<'ASSET' | 'DEBT' | null>(null);
+  return (
+    <>
+      <Page t="무엇을 추가하시겠어요?" d="추가한 정보는 확정한 뒤에만 내 상속 정보에 반영됩니다." />
+      {[
+        { key: 'DOC', title: '문서 업로드', hint: 'PDF · JPG · PNG', desc: '안심상속 조회 결과, 채무 안내서, 보험증권 등을 올리면 AI가 기관·유형·금액·기준일을 찾아 정리합니다.' },
+        { key: 'ASSET', title: '재산 직접 추가', hint: '문서 없이 입력', desc: '예금·보험·현금 등 알고 있는 재산을 직접 입력합니다. 금액을 모르면 미확인으로 저장할 수 있습니다.' },
+        { key: 'DEBT', title: '채무 직접 추가', hint: '문서 없이 입력', desc: '대출·카드대금 등 확인한 채무를 직접 입력합니다. 잔액을 모르면 미확인으로 저장할 수 있습니다.' },
+      ].map(o => (
+        <button className="choice pick" key={o.key} onClick={() => o.key === 'DOC' ? nav(`/cases/${p.caseId}/documents/upload`) : setAdding(o.key as 'ASSET' | 'DEBT')}>
+          <span className="pick-icon" aria-hidden="true">＋</span>
+          <span className="pick-head"><b>{o.title}</b><small>{o.hint}</small></span>
+          <span className="pick-arrow" aria-hidden="true">›</span>
+          <span className="pick-desc">{o.desc}</span>
+        </button>
+      ))}
+      <Banner>금액을 모르면 미확인으로 저장할 수 있습니다. 미확인 항목은 ‘먼저 확인할 것’에 표시됩니다.</Banner>
+      {adding && <Sheet title={adding === 'ASSET' ? '재산 추가' : '채무 추가'} close={() => setAdding(null)}>
+        <FinancialForm
+          initial={{ assetOrDebt: adding, itemType: adding === 'ASSET' ? 'DEPOSIT' : 'LOAN', institution: '', amount: null, amountStatus: 'CONFIRMED', referenceDate: '', memo: '' }}
+          cancel={() => setAdding(null)}
+          save={async data => { await apiRequest(`cases/${p.caseId}/financial-items`, { method: 'POST', ...jsonBody(data) }); setAdding(null); await qc.invalidateQueries(); nav(`/cases/${p.caseId}/financial-items`); }}
+        />
+      </Sheet>}
+    </>
+  );
+}
+
 function Upload() {
   const [dragging, setDragging] = useState(false);
   const p = useParams(),
@@ -397,6 +446,7 @@ function Upload() {
     [consent, setConsent] = useState(false),
     [msg, setMsg] = useState(""),
     [busy, setBusy] = useState(false);
+  const docs = useQuery({ queryKey: ['docs', p.caseId], queryFn: () => apiRequest<DocumentItem[]>(`cases/${p.caseId}/documents`) });
   async function run(sample = false) {
     setMsg('');
     setBusy(true);
@@ -447,6 +497,9 @@ function Upload() {
       <button className="secondary" disabled={busy} onClick={() => run(true)}>
         가상 샘플 문서로 체험
       </button>
+      {Boolean(docs.data?.length) && <Section t="등록된 파일" action={() => nav(`/cases/${p.caseId}/documents`)}>
+        {docs.data?.map(d => <div className="row document-row" key={d.id}><span>{d.name}<small className="muted">{new Date(d.uploadedAt).toLocaleDateString()}</small></span><Status v={d.status} /></div>)}
+      </Section>}
     </>
   );
 }
@@ -647,7 +700,7 @@ function Info() {
           문서 보기 →
         </button>
       </article>
-      <section className="card"><div className="row"><h2>현재 파악된 재산·채무</h2><button className="link" onClick={() => nav(`/cases/${p.caseId}/financial-items`)}>＋ 추가</button></div><div className="financial-totals"><Metric n={`${sum('ASSET').toLocaleString()}원`} l="확인된 재산" /><Metric n={`${sum('DEBT').toLocaleString()}원`} l="확인된 채무" /></div></section>
+      <section className="card"><div className="row"><h2>현재 파악된 재산·채무</h2><button className="link" onClick={() => nav(`/cases/${p.caseId}/data/new`)}>＋ 추가</button></div><div className="financial-totals"><Metric n={`${sum('ASSET').toLocaleString()}원`} l="확인된 재산" /><Metric n={`${sum('DEBT').toLocaleString()}원`} l="확인된 채무" /></div></section>
       <button className="secondary" onClick={() => nav(`/cases/${p.caseId}/financial-items`)}>재산·채무 상세 보기</button>
       <button
         className="primary"
@@ -766,6 +819,15 @@ function Edit() {
   );
 }
 
+// Figma E1의 3개 그룹. 서버 category를 그룹으로 접는다.
+const WARNING_GROUPS = [
+  { key: 'NOW', title: '지금 확인', categories: ['CHECK_NOW', 'DEADLINE_RISK', 'MISSING_INFO'] },
+  { key: 'CURRENT', title: '현재 단계', categories: ['CURRENT_STEP'] },
+  { key: 'LATER', title: '이후 단계', categories: ['LATER_STEP'] },
+];
+const RISK = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const inGroup = (w: any, key: string) => key === 'ALL' || (WARNING_GROUPS.find(g => g.key === key)?.categories.includes(w.category) ?? false);
+
 function Warnings() {
   const p = useParams(),
     nav = useNavigate();
@@ -775,23 +837,35 @@ function Warnings() {
     queryKey: ["warnings", p.caseId],
     queryFn: () => apiRequest<any[]>(`cases/${p.caseId}/warnings`),
   });
+  const [sort, setSort] = useState('DEADLINE');
+  // 서버는 위험도 → 기한 순으로 준다. 기한 우선 정렬만 화면에서 다시 계산한다.
+  const list = [...(q.data ?? [])].sort((a, b) =>
+    sort === 'DEADLINE'
+      ? (a.deadline || '9999-12-31').localeCompare(b.deadline || '9999-12-31') || RISK.indexOf(b.level) - RISK.indexOf(a.level)
+      : RISK.indexOf(b.level) - RISK.indexOf(a.level));
   return (
     <>
-      <div className="chips filters" aria-label="주의사항 필터">{[['ALL', '전체'], ['CHECK_NOW', '지금 확인'], ['CURRENT_STEP', '현재 단계'], ['LATER_STEP', '이후 단계'], ['DEADLINE_RISK', '기한 위험'], ['MISSING_INFO', '정보 누락']].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
-      <p className="muted">기한 · 위험도 순 정렬 · {q.data?.filter(w => filter === 'ALL' || w.category === filter).length ?? 0}건</p>
+      <div className="chips filters" aria-label="주의사항 필터">{[['ALL', '전체'], ...WARNING_GROUPS.map(g => [g.key, g.title])].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {list.filter(w => inGroup(w, key)).length}</button>)}</div>
+      <div className="row warning-sort">
+        <span className="muted">{sort === 'DEADLINE' ? '기한 · 위험도 순 정렬' : '위험도 순 정렬'} · {list.filter(w => inGroup(w, filter)).length}건</span>
+        <button className="link" onClick={() => setSort(sort === 'DEADLINE' ? 'LEVEL' : 'DEADLINE')}>정렬 변경 ⌄</button>
+      </div>
       {q.isPending && <Loading />}
       {q.isError && <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>}
-      {q.data?.filter(w => filter === 'ALL' || w.category === filter).map((w) => (
-        <button
-          className="warning-button"
-          key={w.id}
-          onClick={() => setSelected(w)}
-        >
-          <Warning w={w} />
-          <span>자세히 보기 →</span>
-        </button>
-      ))}
-      {q.data?.filter(w => filter === 'ALL' || w.category === filter).length === 0 && (
+      {WARNING_GROUPS.filter(g => filter === 'ALL' || filter === g.key).map(g => {
+        const rows = list.filter(w => inGroup(w, g.key));
+        if (!rows.length) return null;
+        return <section className="warning-group" key={g.key}>
+          <h2>{g.title}</h2>
+          {rows.map(w => (
+            <button className="warning-button" key={w.id} onClick={() => setSelected(w)}>
+              <Warning w={w} />
+              <span aria-hidden="true">›</span>
+            </button>
+          ))}
+        </section>;
+      })}
+      {!q.isPending && !q.isError && list.filter(w => inGroup(w, filter)).length === 0 && (
         <Empty
           t="현재 주의사항이 없어요"
           d="정보를 변경하면 다시 평가됩니다."
@@ -802,6 +876,13 @@ function Warnings() {
   );
 }
 
+type RecentScreen = { label: string; target: string; id?: number };
+const RECENT_KEY = 'chatRecentScreens';
+const CHAT_SUGGESTIONS = ['상속포기 기한', '채무 확인', '자료 올리기', '내 상속 정보', '전체 주의사항', '로드맵 보기'];
+function readRecent(): RecentScreen[] {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+}
+
 function Chat() {
   const p = useParams(),
     nav = useNavigate(),
@@ -810,6 +891,9 @@ function Chat() {
     [hint, setHint] = useState(""),
     [sent, setSent] = useState(""),
     [reply, setReply] = useState<ChatReply>();
+  // 최근 도착한 화면. 검색어가 아니라 이동 결과를 남긴다 (Figma J1).
+  const [recent, setRecent] = useState<RecentScreen[]>(readRecent);
+  useEffect(() => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch { /* 저장 실패는 무시한다 */ } }, [recent]);
   const m = useMutation({
     mutationFn: (message: string) =>
       apiRequest<ChatReply>(`cases/${p.caseId}/chat`, {
@@ -833,9 +917,10 @@ function Chat() {
     m.mutate(v);
   }
   // 작성 중인 내용이 있으면 확인 후 이동한다. 화면 이동만 하고 저장·삭제는 하지 않는다.
-  function go(target?: string, id?: number) {
+  function go(target?: string, id?: number, label?: string) {
     if (!target) return;
     if (unsavedForm.dirty && !confirm("작성 중인 내용이 저장되지 않았습니다. 이동할까요?")) return;
+    if (label) setRecent([{ label, target, id }, ...recent.filter(r => r.label !== label)].slice(0, 2));
     nav(destination(target, id));
     setOpen(false);
   }
@@ -851,17 +936,20 @@ function Chat() {
       {open && (
         <Sheet variant="chat" title="무엇을 찾으세요?" close={() => setOpen(false)} action={<button className="link" onClick={() => { setReply(undefined); setSent(''); setInput(''); setHint(''); m.reset(); }}>대화 지우기</button>}>
           <section className="chat-content">
-            {!sent && <div className="chips chat-suggestions">
-              {[
-                "지금 뭘 해야 해?",
-                "업로드한 문서 보여줘",
-                "기한이 궁금해",
-              ].map((x) => (
-                <button key={x} onClick={() => ask(x)}>
-                  {x}
-                </button>
-              ))}
-            </div>}
+            {!sent && <>
+              <p className="muted">짧게 적어도 됩니다. 예) 상속포기 기한, 채무, 자료 올리기</p>
+              <div className="chips chat-suggestions">
+                {CHAT_SUGGESTIONS.map((x) => (
+                  <button key={x} onClick={() => ask(x)}>
+                    {x}
+                  </button>
+                ))}
+              </div>
+              {Boolean(recent.length) && <div className="chat-recent">
+                <h3>최근 찾은 화면</h3>
+                {recent.map(r => <button className="checklist-row row" key={r.label} onClick={() => go(r.target, r.id, r.label)}><span>{r.label}</span><span aria-hidden="true">›</span></button>)}
+              </div>}
+            </>}
             {sent && <div className="sent-bubble">{sent}</div>}
             {m.isPending && <p className="muted" role="status">관련 화면을 찾고 있어요…</p>}
             {hint && <p className="muted">{hint}</p>}
@@ -889,20 +977,21 @@ function Chat() {
                 {reply.navigationTarget && (
                   <button
                     className="primary"
-                    onClick={() => go(reply.navigationTarget, reply.targetId)}
+                    onClick={() => go(reply.navigationTarget, reply.targetId, reply.buttonLabel)}
                   >
                     {reply.buttonLabel} →
                   </button>
                 )}
                 {reply.candidates?.length > 0 && (
-                  <div className="chips">
+                  <div className="chat-candidates">
                     {reply.candidates.map((c) => (
                       <button
+                        className="checklist-row row"
                         key={`${c.navigationTarget}-${c.targetId ?? ""}-${c.label}`}
-                        title={c.description}
-                        onClick={() => go(c.navigationTarget, c.targetId)}
+                        onClick={() => go(c.navigationTarget, c.targetId, c.label)}
                       >
-                        {c.label}
+                        <span>{c.label}<small className="muted">{c.description}</small></span>
+                        <span aria-hidden="true">›</span>
                       </button>
                     ))}
                   </div>
