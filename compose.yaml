@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file:
+      - .env.local
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sangsok}
+      POSTGRES_USER: ${POSTGRES_USER:-sangsok}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sangsok} -d ${POSTGRES_DB:-sangsok}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env.local
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sangsok}
+      DB_USERNAME: ${POSTGRES_USER:-sangsok}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-local-change-me}
+      STORAGE_PATH: /var/lib/sangsok/uploads
+    volumes:
+      - document_data:/var/lib/sangsok/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  document_data:
