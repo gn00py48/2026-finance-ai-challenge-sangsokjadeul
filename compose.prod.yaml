@@ -80,6 +80,10 @@ services:
   watchtower:
     image: containrrr/watchtower:latest
     restart: unless-stopped
+    # containrrr/watchtower :latest는 2024년 이후 방치되어 기본 Docker API 1.25를 쓴다.
+    # 요즘 docker 데몬은 1.40+만 받으므로 명시적으로 올려준다.
+    environment:
+      DOCKER_API_VERSION: "1.44"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 60 --cleanup --label-enable
