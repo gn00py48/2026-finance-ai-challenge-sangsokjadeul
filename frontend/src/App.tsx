@@ -797,7 +797,7 @@ function Warnings() {
           d="정보를 변경하면 다시 평가됩니다."
         />
       )}
-      {selected && <Sheet title={selected.title} close={() => setSelected(null)}><Warning w={selected} /><button className="primary" onClick={() => nav(destination(selected.navigationTarget))}>관련 화면으로 이동</button></Sheet>}
+      {selected && <Sheet title={selected.title} close={() => setSelected(null)}><Warning w={selected} />{selected.officialUrl && /^https?:\/\//.test(selected.officialUrl) && <a className="secondary official-link" href={selected.officialUrl} target="_blank" rel="noreferrer">공식 안내 열기 ↗</a>}<button className="primary" onClick={() => nav(destination(selected.navigationTarget))}>관련 화면으로 이동</button></Sheet>}
     </>
   );
 }

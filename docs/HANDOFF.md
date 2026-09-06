@@ -181,7 +181,7 @@ git diff --stat
 | INFO-01~04 | 내 상속 정보 | 완료 | info/edit pages, `GET /api/documents/{id}/file` | 없음 |
 | EDIT-01~02 | 통합 수정·영향 검사 | 완료 | edit/financial APIs | 영향 설명 세분화 |
 | TASK-01~03 | 단계 상세·결과·취소 | 완료 | roadmap controller/pages | 단계 유형별 결과 폼 세분화 |
-| WARN-01 | 전체 주의사항 | 부분 구현 | warning API/page | 필터 UI 및 공식 링크 관리 |
+| WARN-01 | 전체 주의사항 | 완료 | warning API/page | 필터는 카테고리 6칩, 공식 링크는 warning의 관련 step에서 상속 |
 | COMMON-04 | AI 챗봇 화면 바로가기 | 완료 | `chat`, `OpenAiChatService`, floating chat | 사건 요약 컨텍스트 확대 |
 | AUTH | 가입·로그인·JWT·소유권 | 완료 | `auth`, `SecurityConfig` | 없음 (refresh token 회전·폐기 구현) |
 
@@ -284,10 +284,15 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app -v "$HOME/.m2":/va
 aws ssm start-session --target i-05c15888efd92d75d   # AWS_PROFILE 지정 필요
 sudo -iu ubuntu && cd /opt/sangsok
 
-./deploy/deploy.sh                    # SSM에서 .env를 다시 만들고 이미지 pull 후 재기동
+./deploy/deploy.sh                    # .env 재생성이나 compose 변경이 있을 때만 필요
 docker compose -f compose.prod.yaml ps
 docker compose -f compose.prod.yaml logs -f backend
 ```
+
+**코드 배포는 자동이다.** `dev` 브랜치가 갱신되면 GitHub Actions가 GHCR에 새 이미지(`:latest`)를
+올리고, EC2의 `watchtower` 컨테이너가 60초 간격으로 감지해 `backend`, `frontend` 컨테이너를 다시
+pull하고 재기동한다. `deploy.sh`는 SSM 파라미터가 바뀌었거나 `compose.prod.yaml` 자체가 바뀌었을
+때만 수동으로 돌린다.
 
 설정값은 SSM Parameter Store `/sangsok/*`에 있다. 바꾸려면 파라미터를 `--overwrite`로 갱신한 뒤
 `deploy.sh`를 다시 실행한다. 서버의 `.env`를 직접 고치면 다음 배포에서 덮어써진다.
@@ -311,8 +316,7 @@ SSM 파라미터, Session Manager, 예산 알림, IAM, 보안그룹은 무료다
    검증 전까지 운영은 `AI_PROVIDER=mock`으로 둔다.
 2. 마스킹 검증 후 OpenAI 실키로 전환하고 PDF/PNG 라이브 E2E 확인.
 3. 단계 유형별 결과 입력 폼. 현재 `resultText`가 "사용자 입력"으로 하드코딩되어 있다.
-4. WARN-01 주의사항 필터 UI와 공식 링크 관리.
-5. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
+4. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
 
 ### 자주 묻는 것
 
