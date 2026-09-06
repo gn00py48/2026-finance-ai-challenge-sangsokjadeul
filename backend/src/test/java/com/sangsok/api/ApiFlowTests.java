@@ -18,6 +18,26 @@ class ApiFlowTests {
     @Test void authenticationAndCaseOwnershipAreEnforced()throws Exception{String owner=signup("owner"),other=signup("other");long id=createCase(owner,true);mvc.perform(get("/api/cases/{id}",id)).andExpect(status().isUnauthorized());mvc.perform(get("/api/cases/{id}",id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());mvc.perform(get("/api/cases/{id}",999999).header("Authorization","Bearer "+owner)).andExpect(status().isNotFound());}
     @Test void taskCompletionActivatesNextAndCancellationMarksRecheck()throws Exception{String token=signup("task");long id=createCase(token,true);String auth="Bearer "+token;mvc.perform(post("/api/cases/{id}/roadmaps",id).header("Authorization",auth)).andExpect(status().isOk());JsonNode steps=mapper.readTree(mvc.perform(get("/api/cases/{id}/tasks",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString());long first=steps.get(0).get("id").asLong(),second=steps.get(1).get("id").asLong();String done="{\"progressStatus\":\"COMPLETED\",\"resultDate\":\"2026-09-01\"}";mvc.perform(patch("/api/tasks/{id}/result",first).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(done)).andExpect(jsonPath("$.status").value("COMPLETED"));mvc.perform(patch("/api/tasks/{id}/result",second).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(done)).andExpect(jsonPath("$.status").value("COMPLETED"));mvc.perform(patch("/api/tasks/{id}/result",first).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content("{\"progressStatus\":\"IN_PROGRESS\"}"));mvc.perform(get("/api/tasks/{id}",second).header("Authorization",auth)).andExpect(jsonPath("$.status").value("RECHECK_REQUIRED"));}
     @Test void documentCandidatesAreNotAppliedUntilConfirmAndLowConfidenceNeedsReview()throws Exception{String token=signup("doc");long id=createCase(token,true);String auth="Bearer "+token;String created=mvc.perform(post("/api/cases/{id}/documents/sample",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString();long docId=mapper.readTree(created).get("id").asLong();String analyzed=mvc.perform(post("/api/documents/{id}/analyze",docId).header("Authorization",auth)).andExpect(jsonPath("$.status").value("NEEDS_REVIEW")).andReturn().getResponse().getContentAsString();mvc.perform(get("/api/cases/{id}/financial-items",id).header("Authorization",auth)).andExpect(jsonPath("$.length()").value(0));JsonNode result=mapper.readTree(analyzed).get("analysis");mvc.perform(patch("/api/documents/{id}/confirm",docId).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(result))).andExpect(jsonPath("$.status").value("CONFIRMED"));String itemJson=mvc.perform(get("/api/cases/{id}/financial-items",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString();JsonNode list=mapper.readTree(itemJson);assertThat(list.size()).isEqualTo(2);assertThat(list.get(0).get("amountStatus").asText()).isEqualTo("NEEDS_CONFIRMATION");}
+    @Test void regeneratingRoadmapKeepsTaskResultsAndReportsChanges()throws Exception{
+        String token=signup("recalc");long id=createCase(token,true);String auth="Bearer "+token;
+        mvc.perform(post("/api/cases/{id}/roadmaps",id).header("Authorization",auth)).andExpect(status().isOk());
+        JsonNode steps=mapper.readTree(mvc.perform(get("/api/cases/{id}/tasks",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString());
+        mvc.perform(patch("/api/tasks/{id}/result",steps.get(0).get("id").asLong()).header("Authorization",auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"progressStatus\":\"COMPLETED\",\"resultDate\":\"2026-09-01\"}")).andExpect(status().isOk());
+
+        String regenerated=mvc.perform(post("/api/cases/{id}/roadmaps/recalculate",id).header("Authorization",auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode body=mapper.readTree(regenerated);
+        assertThat(body.get("version").asInt()).isEqualTo(2);
+        assertThat(body.get("steps").get(0).get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(body.get("steps").get(0).get("progressStatus").asText()).isEqualTo("COMPLETED");
+        assertThat(body.get("steps").get(1).get("status").asText()).isEqualTo("CURRENT");
+        assertThat(body.get("changes").get("carriedOver").toString()).contains("VERIFY_INFORMATION");
+        assertThat(body.get("changes").get("added")).isEmpty();
+
+        mvc.perform(get("/api/cases/{id}/roadmaps/diff",id).header("Authorization",auth))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.carriedOver[0]").value("VERIFY_INFORMATION"));
+    }
+
     @Test void refreshTokenRotatesAndLogoutRevokesIt()throws Exception{
         String username="rot"+UUID.randomUUID().toString().substring(0,8);
         String body="{\"username\":\""+username+"\",\"password\":\"password123\"}";
