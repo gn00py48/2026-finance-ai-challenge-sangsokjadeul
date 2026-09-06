@@ -474,6 +474,8 @@ D1은 카드 시작 y=77과 카드 간격 12px이 일치한다. H1은 제목 y=7
 
 - `4574aee` feat: Figma 대조 결과를 반영해 UI 재작업 — 화면 재작업, 디자인 토큰, 간격 수정
 - `6b4898c` docs: Figma 전수 대조 결과와 재작업 내역 기록 — `docs/figma-gap.md` 신규, 이 문서 갱신
+- `d2b941f` docs: HANDOFF 기준 시점을 이번 작업으로 갱신
+- `f4d214d` fix: 나머지 7개 화면의 좌표 대조 결과를 반영 — B1·F1·F2·G1·H2·B9·J1
 
-`dev`를 대상으로 PR을 열었다. 병합 시 CI가 GHCR 이미지를 만들지만 EC2 반영은 별개다.
-운영 반영 절차는 `docs/deployment.md`와 `deploy/`를 따른다.
+`dev`를 대상으로 [PR #13](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/13)을 열었다.
+병합 시 CI가 GHCR 이미지를 만들지만 EC2 반영은 별개다. 운영 반영 절차는 `docs/deployment.md`와 `deploy/`를 따른다.
