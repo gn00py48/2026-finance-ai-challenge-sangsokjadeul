@@ -4,10 +4,10 @@ const legal = '본 서비스는 입력·업로드 정보를 기반으로 상속 
 export function Public({ children, variant = 'onboarding' }: { children: ReactNode; variant?: 'login' | 'signup' | 'onboarding' }) {
   return <div className={`public public--${variant}`}>{children}</div>;
 }
-export function Page({ k, t, d }: { k: string; t: string; d: string }) {
+export function Page({ k, t, d }: { k?: string; t: string; d: string }) {
   return (
     <div className="page">
-      <p className="eyebrow">{k}</p>
+      {k && <p className="eyebrow">{k}</p>}
       <h1>{t}</h1>
       <p className="sub">{d}</p>
     </div>
@@ -148,13 +148,19 @@ export function Status({ v }: { v: string }) {
   return <span className={`status ${v.toLowerCase()}`}>{l[v] || v}</span>;
 }
 export function Warning({ w }: { w: any }) {
+  const level = ({ LOW: '낮음', MEDIUM: '보통', HIGH: '높음', CRITICAL: '매우 높음' } as Record<string, string>)[w.level] || w.level;
+  const category = ({ CHECK_NOW: '지금 확인', CURRENT_STEP: '현재 단계', LATER_STEP: '이후 단계', DEADLINE_RISK: '기한 위험', MISSING_INFO: '정보 입력 필요' } as Record<string, string>)[w.category] || w.category;
   return (
-    <div className={`warning ${w.level.toLowerCase()}`}>
-      <b>{w.title}</b>
+    <div className="warning">
+      <div className="badges warning-head">
+        <span className={`risk risk--${w.level.toLowerCase()}`}>위험 {level}</span>
+        <b>{w.title}</b>
+      </div>
       <p>{w.message}</p>
-      <small>
-        {({CHECK_NOW:'지금 확인', CURRENT_STEP:'현재 단계', LATER_STEP:'이후 단계', DEADLINE_RISK:'기한 위험', MISSING_INFO:'정보 누락'} as Record<string,string>)[w.category] || w.category} · {({LOW:'낮음', MEDIUM:'보통', HIGH:'높음', CRITICAL:'매우 높음'} as Record<string,string>)[w.level] || w.level}
-      </small>
+      <div className="badges">
+        <span className="status">{w.stepTitle ? `현재 단계: ${w.stepTitle}` : category}</span>
+        {w.dDay != null && <span className="status">{w.dDay < 0 ? `기한 ${Math.abs(w.dDay)}일 경과` : w.dDay === 0 ? 'D-DAY' : `D-${w.dDay}`}</span>}
+      </div>
     </div>
   );
 }
