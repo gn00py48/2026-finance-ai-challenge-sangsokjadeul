@@ -1,4 +1,5 @@
-FROM maven:3.9.11-eclipse-temurin-17 AS build
+# 빌드 스테이지는 항상 빌더 아키텍처에서 돈다. jar은 아키텍처 중립이라 arm64 타깃도 QEMU 없이 빌드된다.
+FROM --platform=$BUILDPLATFORM maven:3.9.11-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY pom.xml .
 COPY src ./src

@@ -11,3 +11,9 @@ target/
 .DS_Store
 Thumbs.db
 uploads/
+
+# terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/.terraform.lock.hcl
