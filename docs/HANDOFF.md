@@ -1,10 +1,10 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최종 갱신: 2026-09-06  
-기준 브랜치: `dev`. PR #2(MVP)와 PR #3(S3·마스킹·refresh token·로드맵 이관·배포 구성)이 머지되었고,
-PR #4(배포 중 발견한 TLS 부트스트랩 수정)가 열려 있다.
+기준 브랜치: `dev`. 열린 PR 없음. PR #2(MVP), #3(S3·마스킹·refresh token·로드맵 이관·배포 구성),
+#4(배포 중 발견한 TLS 부트스트랩 수정), #5(COMMON-04 챗봇 예외 처리)가 모두 머지되었다.
 
-**운영 배포됨: https://sangsokjadeul.duckdns.org** — 상세는 아래 "운영 배포 현황".
+**운영 배포됨: https://sangsokjadeul.duckdns.org** — `dev` 최신 코드가 반영되어 있다. 상세는 아래 "운영 배포 현황".
 
 ## 작업 시작 체크리스트
 
@@ -115,7 +115,9 @@ cd backend
 - Frontend lint / production build: passed
 - Docker 이미지: GitHub Actions에서 linux/amd64·linux/arm64 빌드 후 GHCR push 성공
 - 마스킹 실동작: 렌더한 `900101-1234567`을 마스킹한 뒤 재-OCR에서 숫자가 사라지는 것 확인
-- 배포 검증: HTTPS 헬스체크 UP, HTTP→HTTPS 301, 로그인 200, refresh 쿠키 `Secure; HttpOnly; SameSite=Strict`
+- 배포 검증: HTTPS 헬스체크 UP, HTTP→HTTPS 301(딥링크 포함), HSTS `max-age=31536000`, 로그인 200,
+  refresh 쿠키 `Secure; HttpOnly; SameSite=Strict`
+- 챗봇 운영 확인: 범위 밖 입력은 이동하지 않고 주요 메뉴를 주고, 모호한 입력은 후보를 주며, 명확한 키워드는 바로 이동한다
 - 실제 OpenAI 네트워크 호출: 미실행. 운영은 `AI_PROVIDER=mock`이고 `AI_API_KEY`는 자리표시자다
 - OpenAI 요청 계약: 로컬 가짜 HTTP 서버로 JSON Schema와 `store=false` 검증 통과
 
@@ -180,6 +182,12 @@ SSM 파라미터, Session Manager, 예산 알림, IAM, 보안그룹은 무료다
 3. 단계 유형별 결과 입력 폼. 현재 `resultText`가 "사용자 입력"으로 하드코딩되어 있다.
 4. WARN-01 주의사항 필터 UI와 공식 링크 관리.
 5. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
+
+### 자주 묻는 것
+
+브라우저에 "주의 요함"이 뜨는데 같은 창에 "인증서가 유효함"이 함께 보이면, 그 탭이 `http://`로 열린 것이다.
+인증서 발급 전에 접속한 페이지가 캐시에 남아 SPA 라우팅만 이어진 경우에 그렇다. `https://`를 명시해 한 번
+열면 HSTS가 등록되어 이후에는 브라우저가 요청 전에 스스로 https로 바꾼다. 서버는 딥링크까지 301로 넘긴다.
 
 ### 미해결 관찰
 
