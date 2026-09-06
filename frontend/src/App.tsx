@@ -6,7 +6,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { apiBlob, apiRequest, jsonBody } from "./shared/api/client";
 import type {
@@ -21,6 +21,15 @@ import type {
 const legal =
   "본 서비스는 입력·업로드 정보를 기반으로 상속 절차를 정리하는 참고용 서비스입니다. 법률·세무 판단이나 기관의 공식 확인을 대신하지 않습니다.";
 const caseId = () => localStorage.getItem("caseId");
+// 챗봇이 화면을 이동하기 전에 확인해야 하는 미저장 상태. 폼 화면이 켜고 끈다.
+const unsavedForm = { dirty: false };
+const MAIN_MENU = [
+  { label: "메인", target: "DASHBOARD" },
+  { label: "상속자료 추가", target: "DOCUMENT_UPLOAD" },
+  { label: "재산·채무", target: "FINANCIAL_ITEM_LIST" },
+  { label: "내 상속 정보", target: "CASE_INFO" },
+  { label: "전체 주의사항", target: "WARNING_LIST" },
+];
 const destination = (target: string, id?: number) => {
   const r = `/cases/${caseId()}`;
   return (
@@ -968,6 +977,9 @@ function Edit() {
   const p = useParams(),
     nav = useNavigate(),
     [error, setError] = useState("");
+  useEffect(() => () => {
+    unsavedForm.dirty = false;
+  }, []);
   const q = useQuery({
     queryKey: ["case", p.caseId],
     queryFn: () => apiRequest<CaseInfo>(`cases/${p.caseId}`),
@@ -998,6 +1010,7 @@ function Edit() {
         );
         alert(describeChanges(next.version, next.changes));
       }
+      unsavedForm.dirty = false;
       nav(`/cases/${p.caseId}/info`);
     } catch (x) {
       setError((x as Error).message);
@@ -1010,7 +1023,13 @@ function Edit() {
         t="중요 정보를 확인하세요"
         d="기산일 등 변경은 저장 후 영향 범위를 안내합니다."
       />
-      <form className="stack" onSubmit={submit}>
+      <form
+        className="stack"
+        onSubmit={submit}
+        onChange={() => {
+          unsavedForm.dirty = true;
+        }}
+      >
         <Field
           label="사망자 표시명"
           name="name"
@@ -1082,6 +1101,7 @@ function Chat() {
     nav = useNavigate(),
     [open, setOpen] = useState(false),
     [input, setInput] = useState(""),
+    [hint, setHint] = useState(""),
     [reply, setReply] = useState<ChatReply>();
   const m = useMutation({
     mutationFn: (message: string) =>
@@ -1089,13 +1109,26 @@ function Chat() {
         method: "POST",
         ...jsonBody({ message }),
       }),
-    onSuccess: setReply,
+    onSuccess: (r) => {
+      setHint("");
+      setReply(r);
+    },
   });
   function ask(v = input) {
-    if (v.trim()) {
-      setInput("");
-      m.mutate(v);
+    if (!v.trim()) {
+      setHint("찾으시는 화면의 키워드를 입력해 주세요. 예: 문서, 재산, 로드맵, 기한");
+      return;
     }
+    setHint("");
+    setInput("");
+    m.mutate(v);
+  }
+  // 작성 중인 내용이 있으면 확인 후 이동한다. 화면 이동만 하고 저장·삭제는 하지 않는다.
+  function go(target?: string, id?: number) {
+    if (!target) return;
+    if (unsavedForm.dirty && !confirm("작성 중인 내용이 저장되지 않았습니다. 이동할까요?")) return;
+    nav(destination(target, id));
+    setOpen(false);
   }
   return (
     <>
@@ -1129,21 +1162,49 @@ function Chat() {
                 </button>
               ))}
             </div>
+            {hint && <p className="muted">{hint}</p>}
+            {m.isError && (
+              <div className="bubble">
+                <p>요청을 처리하지 못했어요. 다시 시도하거나 아래 메뉴로 이동해 주세요.</p>
+                <button className="secondary" onClick={() => m.reset()}>
+                  다시 입력
+                </button>
+                <div className="chips">
+                  {MAIN_MENU.map((x) => (
+                    <button key={x.target} onClick={() => go(x.target)}>
+                      {x.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {reply && (
               <div
                 className={`bubble ${reply.riskLevel === "HIGH" ? "risk" : ""}`}
               >
                 <p>{reply.message}</p>
                 <small>위험도 {reply.riskLevel}</small>
-                <button
-                  className="primary"
-                  onClick={() => {
-                    nav(destination(reply.navigationTarget, reply.targetId));
-                    setOpen(false);
-                  }}
-                >
-                  {reply.buttonLabel} →
-                </button>
+                {reply.navigationTarget && (
+                  <button
+                    className="primary"
+                    onClick={() => go(reply.navigationTarget, reply.targetId)}
+                  >
+                    {reply.buttonLabel} →
+                  </button>
+                )}
+                {reply.candidates?.length > 0 && (
+                  <div className="chips">
+                    {reply.candidates.map((c) => (
+                      <button
+                        key={`${c.navigationTarget}-${c.targetId ?? ""}-${c.label}`}
+                        title={c.description}
+                        onClick={() => go(c.navigationTarget, c.targetId)}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <form
