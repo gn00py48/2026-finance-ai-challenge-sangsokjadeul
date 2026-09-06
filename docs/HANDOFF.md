@@ -51,7 +51,7 @@ git diff --stat
 | EDIT-01~02 | 통합 수정·영향 검사 | 완료 | edit/financial APIs | 영향 설명 세분화 |
 | TASK-01~03 | 단계 상세·결과·취소 | 완료 | roadmap controller/pages | 단계 유형별 결과 폼 세분화 |
 | WARN-01 | 전체 주의사항 | 부분 구현 | warning API/page | 필터 UI 및 공식 링크 관리 |
-| CHAT | AI 내비게이션 챗봇 | 완료 | `OpenAiChatService`, floating chat | 사건 요약 컨텍스트 확대 |
+| COMMON-04 | AI 챗봇 화면 바로가기 | 완료 | `chat`, `OpenAiChatService`, floating chat | 사건 요약 컨텍스트 확대 |
 | AUTH | 가입·로그인·JWT·소유권 | 완료 | `auth`, `SecurityConfig` | 없음 (refresh token 회전·폐기 구현) |
 
 `완료`는 현재 MVP 흐름이 API·DB·화면까지 연결된 상태를 뜻한다. 실제 기관 조회나 법률·세무 판단 기능은 요구사항상 구현 대상이 아니다.
@@ -111,7 +111,7 @@ cd backend
 .\mvnw.cmd test
 ```
 
-- Backend: 17 tests passed (tesseract가 없는 환경에서는 마스킹 실동작 테스트 1개가 skip된다)
+- Backend: 19 tests passed (tesseract가 없는 환경에서는 마스킹 실동작 테스트 1개가 skip된다)
 - Frontend lint / production build: passed
 - Docker 이미지: GitHub Actions에서 linux/amd64·linux/arm64 빌드 후 GHCR push 성공
 - 마스킹 실동작: 렌더한 `900101-1234567`을 마스킹한 뒤 재-OCR에서 숫자가 사라지는 것 확인
@@ -178,7 +178,7 @@ SSM 파라미터, Session Manager, 예산 알림, IAM, 보안그룹은 무료다
    검증 전까지 운영은 `AI_PROVIDER=mock`으로 둔다.
 2. 마스킹 검증 후 OpenAI 실키로 전환하고 PDF/PNG 라이브 E2E 확인.
 3. 단계 유형별 결과 입력 폼. 현재 `resultText`가 "사용자 입력"으로 하드코딩되어 있다.
-4. WARN-01 주의사항 필터 UI와 공식 링크 관리, 챗봇 사건 컨텍스트 확대.
+4. WARN-01 주의사항 필터 UI와 공식 링크 관리.
 5. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
 
 ### 미해결 관찰
