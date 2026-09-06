@@ -1,4 +1,6 @@
 node_modules/
+backend/data/
+.maven-cache/
 dist/
 target/
 .env
