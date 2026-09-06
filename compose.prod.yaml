@@ -29,7 +29,8 @@ services:
       STORAGE_TYPE: s3
       S3_BUCKET: ${S3_BUCKET:?required}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
-      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-3600}
+      # access token 15분. 만료되면 프론트가 refresh 쿠키로 한 번만 갱신하고 재시도한다.
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-900}
     depends_on:
       db:
         condition: service_healthy
@@ -52,7 +53,9 @@ services:
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot
     # 갱신된 인증서를 6시간마다 다시 읽는다. certbot 컨테이너는 nginx를 reload할 수 없다.
-    command: /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    # 이미지 entrypoint를 그대로 exec해야 한다. 건너뛰면 templates/ 치환이 실행되지 않아
+    # 베이스 이미지에 구워진 설정이 그대로 쓰이고 ACME 경로가 SPA fallback으로 응답한다.
+    command: /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec /docker-entrypoint.sh nginx -g 'daemon off;'"
     depends_on:
       backend:
         condition: service_healthy
