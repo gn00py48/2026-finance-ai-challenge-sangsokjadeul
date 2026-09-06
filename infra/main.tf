@@ -7,6 +7,15 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  # 이 서비스가 만든 자원을 계정 안에서 구분하고 비용을 따로 집계하기 위한 태그.
+  # Cost Explorer에서 보려면 결제 콘솔에서 Project를 비용 할당 태그로 활성화해야 한다.
+  default_tags {
+    tags = {
+      Project   = var.project
+      ManagedBy = "terraform"
+    }
+  }
 }
 
 data "aws_vpc" "default" {

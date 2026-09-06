@@ -38,3 +38,15 @@ variable "bucket_name" {
   description = "문서 저장 S3 버킷 이름. 전역에서 고유해야 한다."
   type        = string
 }
+
+variable "monthly_budget_usd" {
+  description = "월 예산(USD). 실제 사용액이 이 값의 80%와 100%에 닿으면 메일이 온다."
+  type        = number
+  default     = 25
+}
+
+variable "budget_alert_email" {
+  description = "예산 알림을 받을 주소. 비우면 예산을 만들지 않는다."
+  type        = string
+  default     = ""
+}
