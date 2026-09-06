@@ -1,4 +1,4 @@
-import { deadline, itemLabels } from './shared/format';
+import { deadline, itemLabels, maskSensitiveText } from './shared/format';
 import Onboarding from './Onboarding';
 import Task from './Task';
 import Finances from './Finances';
@@ -66,6 +66,7 @@ export default function App() {
     : "/login";
   return (
     <><Routes>
+      <Route path="/" element={<Splash home={home} />} />
       <Route path="/login" element={<Auth />} />
       <Route path="/signup" element={<Auth signup />} />
       <Route
@@ -180,6 +181,18 @@ export default function App() {
     </Routes>{expired && <Sheet title="로그인이 만료되었어요" close={() => { setExpired(false); qc.clear(); nav('/login'); }}><p>정보를 안전하게 확인하려면 다시 로그인해 주세요.</p><button className="primary" onClick={() => { setExpired(false); qc.clear(); nav('/login'); }}>다시 로그인</button></Sheet>}</>
   );
 }
+function Splash({ home }: { home: string }) {
+  const nav = useNavigate();
+  return <Public variant="splash">
+    <div className="splash-brand">
+      <img src={`${import.meta.env.BASE_URL}assets/compass.svg`} alt="" />
+      <p>상속 나침반</p>
+      <h1>흩어진 상속 금융정보를<br />하나의 실행 가능한 로드맵으로</h1>
+      <p className="sub">지금 필요한 절차부터 차근차근 안내해 드릴게요.</p>
+    </div>
+    <button className="primary splash-start" onClick={() => nav(home)}>시작하기</button>
+  </Public>;
+}
 function Guard({ children }: { children: ReactNode }) {
   return localStorage.getItem("accessToken") ? (
     children
@@ -191,7 +204,9 @@ function Guard({ children }: { children: ReactNode }) {
 function Auth({ signup = false }: { signup?: boolean }) {
   const nav = useNavigate(),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [username, setUsername] = useState(signup ? "" : "demo"),
+    [password, setPassword] = useState(signup ? "" : "demo1234");
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -239,14 +254,16 @@ function Auth({ signup = false }: { signup?: boolean }) {
           label="아이디"
           name="username"
           placeholder="아이디를 입력해 주세요"
-          defaultValue=""
+          value={username}
+          change={setUsername}
         />
         <Field
           label="비밀번호"
           name="password"
           placeholder="비밀번호를 입력해 주세요"
           type="password"
-          defaultValue=""
+          value={password}
+          change={setPassword}
         />
         {signup && <Field label="비밀번호 확인" name="passwordConfirm" type="password" />}
         {error && <Error>{error}</Error>}
@@ -383,8 +400,8 @@ function Dashboard() {
         <div className="road-legend"><span>완료</span><span>현재</span><span>예정</span></div>
         <p className="muted">단계는 결과 입력으로만 완료됩니다</p>
       </Section>
-      <Section className="checklist-card" t="먼저 확인할 것" action={() => nav(`/cases/${p.caseId}/financial-items`)}>{items.data?.filter(x => x.amountStatus === 'NEEDS_CONFIRMATION').map(x => <button className="checklist-row row" key={x.id} onClick={() => setPicked(x)}><span>{x.institution || itemLabels[x.itemType]}<small className="muted">금액 확인 필요</small></span><span aria-hidden="true">›</span></button>)}{items.data && !items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION') && <p className="muted">미확인 금액이 없습니다.</p>}</Section>
-      {picked && <Sheet title={picked.institution || itemLabels[picked.itemType]} close={() => setPicked(null)}>
+      <Section className="checklist-card" t="먼저 확인할 것" action={() => nav(`/cases/${p.caseId}/financial-items`)}>{items.data?.filter(x => x.amountStatus === 'NEEDS_CONFIRMATION').map(x => <button className="checklist-row row" key={x.id} onClick={() => setPicked(x)}><span>{maskSensitiveText(x.institution) || itemLabels[x.itemType]}<small className="muted">금액 확인 필요</small></span><span aria-hidden="true">›</span></button>)}{items.data && !items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION') && <p className="muted">미확인 금액이 없습니다.</p>}</Section>
+      {picked && <Sheet title={maskSensitiveText(picked.institution) || itemLabels[picked.itemType]} close={() => setPicked(null)}>
         <p className="muted">금액이 확인되지 않은 항목입니다. 어떻게 확인할까요?</p>
         <button className="primary" onClick={() => { setEditing(picked); setPicked(null); }}>금액 직접 입력</button>
         <button className="secondary" onClick={() => nav(`/cases/${p.caseId}/data/new`)}>자료 등록하기</button>
@@ -547,7 +564,7 @@ function Documents() {
               <span>
                 {x.assetOrDebt === "ASSET" ? "재산" : "채무"} · {itemLabels[x.category] || x.category}
               </span>
-              <b>{x.institution}</b>
+              <b>{maskSensitiveText(x.institution)}</b>
               <strong>
                 {x.amount != null
                   ? Number(x.amount).toLocaleString() + "원"
@@ -555,7 +572,7 @@ function Documents() {
               </strong>
               <small>
                 신뢰도 {Math.round((x.confidence || 0) * 100)}% ·{" "}
-                {x.evidenceText}
+                {maskSensitiveText(x.evidenceText)}
               </small>
             </div>
           ))}
@@ -611,10 +628,10 @@ function ReviewEditor({ document, saved }: { document: DocumentItem; saved: () =
   return <div className="review"><div className="chips filters" aria-label="추출 항목 필터">{[['ALL','전체'],['ASSET','재산'],['DEBT','채무'],['UNKNOWN','미확인']].map(([key,label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {analysis.items.filter(x => matches(x,key)).length}</button>)}</div>{analysis.items.map((x, i) => matches(x,filter) && <Fragment key={i}>
     {analysis.items.findIndex(y => matches(y,filter) && y.assetOrDebt === x.assetOrDebt) === i && <h3 className="extract-group">{x.assetOrDebt === 'ASSET' ? '재산' : '채무'}</h3>}
     <div className="extract">
-    <div className="row"><div className="badges"><span className="status">{itemLabels[x.category] || x.category}</span><h3>{x.institution || '기관 미입력'}</h3></div><button className="link" disabled={busy} onClick={() => setEditing(i)}>수정</button></div>
+    <div className="row"><div className="badges"><span className="status">{itemLabels[x.category] || x.category}</span><h3>{maskSensitiveText(x.institution) || '기관 미입력'}</h3></div><button className="link" disabled={busy} onClick={() => setEditing(i)}>수정</button></div>
     <div className="row"><small>기준일 {x.referenceDate || '미표기'}</small><strong>{x.amountStatus === 'CONFIRMED' && x.amount != null ? `${x.amount.toLocaleString()}원` : '금액 미확인'}</strong></div>
     {x.amountStatus === 'NEEDS_CONFIRMATION' && <Banner>문서에서 금액을 찾지 못했습니다. 확인 후 입력하거나 미확인으로 저장하세요.</Banner>}
-    <details className="extraction-evidence"><summary>추출 근거 · {x.assetOrDebt === 'ASSET' ? '재산' : '채무'}</summary><small>신뢰도 {Math.round((x.confidence || 0) * 100)}% · {x.evidenceText}</small><button className="danger" disabled={busy} onClick={() => setAnalysis({ ...analysis, items: analysis.items.filter((_, n) => n !== i) })}>이 항목 제외</button></details>
+    <details className="extraction-evidence"><summary>추출 근거 · {x.assetOrDebt === 'ASSET' ? '재산' : '채무'}</summary><small>신뢰도 {Math.round((x.confidence || 0) * 100)}% · {maskSensitiveText(x.evidenceText)}</small><button className="danger" disabled={busy} onClick={() => setAnalysis({ ...analysis, items: analysis.items.filter((_, n) => n !== i) })}>이 항목 제외</button></details>
     </div>
   </Fragment>)}{!analysis.items.some(x => matches(x,filter)) && <p className="muted">해당하는 항목이 없습니다.</p>}{error && <Error>{error}</Error>}<p className="review-notice">확정한 항목만 내 상속 정보에 반영됩니다</p><button className="primary" disabled={busy || !analysis.items.length} onClick={confirm}>{busy ? '확정 중…' : `${analysis.items.length}건 모두 확정하기`}</button>
   {editing !== null && <Sheet title="항목 수정" close={() => setEditing(null)}><FinancialForm showMemo={false} initial={{ ...analysis.items[editing], itemType: analysis.items[editing].category, referenceDate: analysis.items[editing].referenceDate ?? undefined }} cancel={() => setEditing(null)} save={async data => { setAnalysis({ ...analysis, items: analysis.items.map((item, i) => i === editing ? { ...item, ...data, category: data.itemType } : item) }); setEditing(null); }} /></Sheet>}
@@ -984,7 +1001,7 @@ function Chat() {
                 {recent.map(r => <button className="checklist-row row" key={r.label} onClick={() => go(r.target, r.id, r.label)}><span>{r.label}</span><span aria-hidden="true">›</span></button>)}
               </div>}
             </>}
-            {sent && <div className="sent-bubble">{sent}</div>}
+            {sent && <div className="sent-bubble">{maskSensitiveText(sent)}</div>}
             {m.isPending && <p className="muted" role="status">관련 화면을 찾고 있어요…</p>}
             {hint && <p className="muted">{hint}</p>}
             {m.isError && (
@@ -1006,7 +1023,7 @@ function Chat() {
               <div
                 className={`bubble ${reply.riskLevel === "HIGH" ? "risk" : ""}`}
               >
-                <p>{reply.message}</p>
+                <p>{maskSensitiveText(reply.message)}</p>
                 {reply.riskLevel === 'HIGH' && <small>법률·세무 판단은 공식 안내 또는 전문가에게 확인해 주세요.</small>}
                 {reply.navigationTarget && (
                   <button

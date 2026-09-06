@@ -1,4 +1,4 @@
-import { deadline } from './shared/format';
+import { deadline, maskSensitiveText } from './shared/format';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ export default function Task() {
     <Section className="detail-card" t="필요 서류"><p>{s.requiredDocuments}</p></Section>
     <Section className="detail-card" t="처리 기관"><p>{s.institution}</p></Section>
     <Section t="주의사항"><Banner>{s.cautions}</Banner>{s.expertRecommended && <p className="expert">중요한 결정은 전문가 확인을 권합니다.</p>}{s.officialUrl && /^https?:\/\//.test(s.officialUrl) && <a className="secondary official-link" href={s.officialUrl} target="_blank" rel="noreferrer">공식 안내 열기 ↗</a>}</Section>
-    {s.progressStatus && <Section t="저장된 처리 결과"><article className="card"><p>{progressLabels[s.progressStatus] || s.progressStatus}</p><p>{s.resultDate || '처리일 미입력'}</p>{s.memo && <p>{s.memo}</p>}</article></Section>}
+    {s.progressStatus && <Section t="저장된 처리 결과"><article className="card"><p>{progressLabels[s.progressStatus] || s.progressStatus}</p><p>{s.resultDate || '처리일 미입력'}</p>{s.memo && <p>{maskSensitiveText(s.memo)}</p>}</article></Section>}
     <div className="page-footer"><button className="primary" onClick={() => setOpen(true)}>{s.progressStatus ? '처리 결과 수정' : '처리 결과 입력하기'}</button></div>
     {open && <ResultForm step={s} needsReview={s.stepKey === 'VERIFY_INFORMATION' && (!items.data || items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION'))} close={() => setOpen(false)} saved={async status => { setOpen(false); setSaved(true); setCompleted(status === 'COMPLETED' || status === 'NOT_APPLICABLE'); await qc.invalidateQueries(); }} />}
     {completed && <Sheet title="이 단계를 완료했어요" close={() => setCompleted(false)}>

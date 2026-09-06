@@ -111,6 +111,13 @@ textarea { height: 96px; resize: vertical; }
 .seg .on { background: white; color: var(--primary); font-weight: 600; }
 
 /* Public screens */
+.public--splash { justify-content: center; padding: 48px 24px max(32px, env(safe-area-inset-bottom)); background: var(--soft); }
+.splash-brand { margin-block: auto; text-align: center; }
+.splash-brand img { width: 72px; height: 72px; margin: 0 auto 18px; }
+.splash-brand > p:first-of-type { color: var(--primary); font-size: 18px; line-height: 28px; font-weight: 600; }
+.splash-brand h1 { margin-top: 14px; word-break: keep-all; }
+.splash-brand .sub { word-break: keep-all; }
+.splash-start { flex-shrink: 0; }
 .public--login { padding-top: 84px; }
 .mark, .mark img { width: 52px; height: 52px; }
 .auth-intro h1 { margin-top: 16px; }
