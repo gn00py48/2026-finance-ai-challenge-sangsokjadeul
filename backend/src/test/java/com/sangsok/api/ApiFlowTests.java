@@ -18,6 +18,30 @@ class ApiFlowTests {
     @Test void authenticationAndCaseOwnershipAreEnforced()throws Exception{String owner=signup("owner"),other=signup("other");long id=createCase(owner,true);mvc.perform(get("/api/cases/{id}",id)).andExpect(status().isUnauthorized());mvc.perform(get("/api/cases/{id}",id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());mvc.perform(get("/api/cases/{id}",999999).header("Authorization","Bearer "+owner)).andExpect(status().isNotFound());}
     @Test void taskCompletionActivatesNextAndCancellationMarksRecheck()throws Exception{String token=signup("task");long id=createCase(token,true);String auth="Bearer "+token;mvc.perform(post("/api/cases/{id}/roadmaps",id).header("Authorization",auth)).andExpect(status().isOk());JsonNode steps=mapper.readTree(mvc.perform(get("/api/cases/{id}/tasks",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString());long first=steps.get(0).get("id").asLong(),second=steps.get(1).get("id").asLong();String done="{\"progressStatus\":\"COMPLETED\",\"resultDate\":\"2026-09-01\"}";mvc.perform(patch("/api/tasks/{id}/result",first).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(done)).andExpect(jsonPath("$.status").value("COMPLETED"));mvc.perform(patch("/api/tasks/{id}/result",second).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(done)).andExpect(jsonPath("$.status").value("COMPLETED"));mvc.perform(patch("/api/tasks/{id}/result",first).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content("{\"progressStatus\":\"IN_PROGRESS\"}"));mvc.perform(get("/api/tasks/{id}",second).header("Authorization",auth)).andExpect(jsonPath("$.status").value("RECHECK_REQUIRED"));}
     @Test void documentCandidatesAreNotAppliedUntilConfirmAndLowConfidenceNeedsReview()throws Exception{String token=signup("doc");long id=createCase(token,true);String auth="Bearer "+token;String created=mvc.perform(post("/api/cases/{id}/documents/sample",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString();long docId=mapper.readTree(created).get("id").asLong();String analyzed=mvc.perform(post("/api/documents/{id}/analyze",docId).header("Authorization",auth)).andExpect(jsonPath("$.status").value("NEEDS_REVIEW")).andReturn().getResponse().getContentAsString();mvc.perform(get("/api/cases/{id}/financial-items",id).header("Authorization",auth)).andExpect(jsonPath("$.length()").value(0));JsonNode result=mapper.readTree(analyzed).get("analysis");mvc.perform(patch("/api/documents/{id}/confirm",docId).header("Authorization",auth).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(result))).andExpect(jsonPath("$.status").value("CONFIRMED"));String itemJson=mvc.perform(get("/api/cases/{id}/financial-items",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString();JsonNode list=mapper.readTree(itemJson);assertThat(list.size()).isEqualTo(2);assertThat(list.get(0).get("amountStatus").asText()).isEqualTo("NEEDS_CONFIRMATION");}
+    @Test void refreshTokenRotatesAndLogoutRevokesIt()throws Exception{
+        String username="rot"+UUID.randomUUID().toString().substring(0,8);
+        String body="{\"username\":\""+username+"\",\"password\":\"password123\"}";
+        var signup=mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse();
+        String first=cookie(signup.getHeader("Set-Cookie"));
+        assertThat(signup.getHeader("Set-Cookie")).contains("HttpOnly").contains("SameSite=Strict").contains("Path=/api/auth");
+
+        var refreshed=mvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken",first))).andExpect(status().isOk()).andReturn().getResponse();
+        String second=cookie(refreshed.getHeader("Set-Cookie"));
+        assertThat(second).isNotEqualTo(first);
+        String access=mapper.readTree(refreshed.getContentAsString()).get("accessToken").asText();
+        mvc.perform(get("/api/cases").header("Authorization","Bearer "+access)).andExpect(status().isOk());
+
+        // 이미 쓴 토큰을 다시 내면 탈취로 보고 해당 사용자의 토큰을 모두 폐기한다.
+        mvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken",first))).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken",second))).andExpect(status().isUnauthorized());
+
+        String fresh=cookie(mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andReturn().getResponse().getHeader("Set-Cookie"));
+        mvc.perform(post("/api/auth/logout").cookie(new jakarta.servlet.http.Cookie("refreshToken",fresh))).andExpect(status().isNoContent());
+        mvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken",fresh))).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/refresh")).andExpect(status().isUnauthorized());
+    }
+    private static String cookie(String setCookie){return setCookie.substring(setCookie.indexOf('=')+1,setCookie.indexOf(';'));}
+
     @Test void documentOriginalIsServedToOwnerOnlyAndDeletableByOwner()throws Exception{
         String token=signup("file"),other=signup("fileother");long id=createCase(token,true);String auth="Bearer "+token;
         long docId=mapper.readTree(mvc.perform(post("/api/cases/{id}/documents/sample",id).header("Authorization",auth)).andReturn().getResponse().getContentAsString()).get("id").asLong();
