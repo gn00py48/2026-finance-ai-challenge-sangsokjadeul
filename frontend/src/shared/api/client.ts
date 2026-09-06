@@ -15,4 +15,14 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   return response.json() as Promise<T>
 }
 
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = localStorage.getItem('accessToken')
+  const headers = new Headers()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${baseUrl}/${path.replace(/^\//, '')}`, { headers })
+  if (response.status === 401) localStorage.removeItem('accessToken')
+  if (!response.ok) throw new Error(`원본을 불러오지 못했습니다. (${response.status})`)
+  return response.blob()
+}
+
 export const jsonBody = (value: unknown): RequestInit => ({ body: JSON.stringify(value) })

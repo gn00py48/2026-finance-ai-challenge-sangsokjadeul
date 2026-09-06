@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.*;
 import com.sangsok.api.document.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import java.nio.file.*;
 import java.util.*;
 
 @Service
@@ -12,9 +11,9 @@ import java.util.*;
 public class OpenAiDocumentAnalyzer implements AiDocumentAnalyzer {
     private final OpenAiResponsesClient client; private final ObjectMapper mapper;
     public OpenAiDocumentAnalyzer(OpenAiResponsesClient client,ObjectMapper mapper){this.client=client;this.mapper=mapper;}
-    @Override public AnalysisResult analyze(Path file,String mimeType){
+    @Override public AnalysisResult analyze(byte[] content0,String mimeType){
         try{
-            String data="data:"+mimeType+";base64,"+Base64.getEncoder().encodeToString(Files.readAllBytes(file));
+            String data="data:"+mimeType+";base64,"+Base64.getEncoder().encodeToString(content0);
             Map<String,Object> media=mimeType.equals("application/pdf")?Map.of("type","input_file","filename","inheritance-document.pdf","file_data",data):Map.of("type","input_image","image_url",data,"detail","high");
             List<Object> content=new ArrayList<>();content.add(Map.of("type","input_text","text","문서의 금융 항목만 추출하세요. 주민등록번호·계좌번호·실명은 출력하지 말고 기관명, 유형, 자산/채무, 금액, 기준일, 신뢰도, 짧은 근거만 반환하세요. 없는 값은 null과 NEEDS_CONFIRMATION으로 표시하세요."));content.add(media);
             Object input=List.of(Map.of("role","user","content",content));
