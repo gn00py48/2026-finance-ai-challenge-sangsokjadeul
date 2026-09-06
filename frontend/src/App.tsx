@@ -14,7 +14,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ApiError, apiBlob, apiRequest, jsonBody } from "./shared/api/client";
 import type {
@@ -598,12 +598,15 @@ function ReviewEditor({ document, saved }: { document: DocumentItem; saved: () =
     try { await apiRequest(`documents/${document.id}/confirm`, { method: "PATCH", ...jsonBody(analysis) }); saved(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-  return <div className="review"><div className="chips filters" aria-label="추출 항목 필터">{[['ALL','전체'],['ASSET','재산'],['DEBT','채무'],['UNKNOWN','미확인']].map(([key,label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {analysis.items.filter(x => matches(x,key)).length}</button>)}</div>{analysis.items.map((x, i) => matches(x,filter) && <div className="extract" key={i}>
+  return <div className="review"><div className="chips filters" aria-label="추출 항목 필터">{[['ALL','전체'],['ASSET','재산'],['DEBT','채무'],['UNKNOWN','미확인']].map(([key,label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {analysis.items.filter(x => matches(x,key)).length}</button>)}</div>{analysis.items.map((x, i) => matches(x,filter) && <Fragment key={i}>
+    {analysis.items.findIndex(y => matches(y,filter) && y.assetOrDebt === x.assetOrDebt) === i && <h3 className="extract-group">{x.assetOrDebt === 'ASSET' ? '재산' : '채무'}</h3>}
+    <div className="extract">
     <div className="row"><div className="badges"><span className="status">{itemLabels[x.category] || x.category}</span><h3>{x.institution || '기관 미입력'}</h3></div><button className="link" disabled={busy} onClick={() => setEditing(i)}>수정</button></div>
     <div className="row"><small>기준일 {x.referenceDate || '미표기'}</small><strong>{x.amountStatus === 'CONFIRMED' && x.amount != null ? `${x.amount.toLocaleString()}원` : '금액 미확인'}</strong></div>
     {x.amountStatus === 'NEEDS_CONFIRMATION' && <Banner>문서에서 금액을 찾지 못했습니다. 확인 후 입력하거나 미확인으로 저장하세요.</Banner>}
     <details className="extraction-evidence"><summary>추출 근거 · {x.assetOrDebt === 'ASSET' ? '재산' : '채무'}</summary><small>신뢰도 {Math.round((x.confidence || 0) * 100)}% · {x.evidenceText}</small><button className="danger" disabled={busy} onClick={() => setAnalysis({ ...analysis, items: analysis.items.filter((_, n) => n !== i) })}>이 항목 제외</button></details>
-  </div>)}{!analysis.items.some(x => matches(x,filter)) && <p className="muted">해당하는 항목이 없습니다.</p>}{error && <Error>{error}</Error>}<p className="review-notice">확정한 항목만 내 상속 정보에 반영됩니다</p><button className="primary" disabled={busy || !analysis.items.length} onClick={confirm}>{busy ? '확정 중…' : `${analysis.items.length}건 모두 확정하기`}</button>
+    </div>
+  </Fragment>)}{!analysis.items.some(x => matches(x,filter)) && <p className="muted">해당하는 항목이 없습니다.</p>}{error && <Error>{error}</Error>}<p className="review-notice">확정한 항목만 내 상속 정보에 반영됩니다</p><button className="primary" disabled={busy || !analysis.items.length} onClick={confirm}>{busy ? '확정 중…' : `${analysis.items.length}건 모두 확정하기`}</button>
   {editing !== null && <Sheet title="항목 수정" close={() => setEditing(null)}><FinancialForm showMemo={false} initial={{ ...analysis.items[editing], itemType: analysis.items[editing].category, referenceDate: analysis.items[editing].referenceDate ?? undefined }} cancel={() => setEditing(null)} save={async data => { setAnalysis({ ...analysis, items: analysis.items.map((item, i) => i === editing ? { ...item, ...data, category: data.itemType } : item) }); setEditing(null); }} /></Sheet>}
   </div>;
 }
@@ -937,6 +940,7 @@ function Chat() {
         <Sheet variant="chat" title="무엇을 찾으세요?" close={() => setOpen(false)} action={<button className="link" onClick={() => { setReply(undefined); setSent(''); setInput(''); setHint(''); m.reset(); }}>대화 지우기</button>}>
           <section className="chat-content">
             {!sent && <>
+              <h3>찾으시는 화면으로 바로 안내해 드릴게요</h3>
               <p className="muted">짧게 적어도 됩니다. 예) 상속포기 기한, 채무, 자료 올리기</p>
               <div className="chips chat-suggestions">
                 {CHAT_SUGGESTIONS.map((x) => (
