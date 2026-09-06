@@ -49,8 +49,14 @@ terraform apply -var bucket_name=<전역에서 고유한 버킷 이름>
 
 ### 2. DuckDNS
 
-[duckdns.org](https://www.duckdns.org)에서 서브도메인을 만들고 위 `public_ip`를 A 레코드로 지정한다.
-EIP는 고정이므로 갱신 스크립트는 필요 없다.
+도메인은 `sangsokjadeul.duckdns.org`를 쓴다. [duckdns.org](https://www.duckdns.org)에 로그인해
+`current ip`를 위 `public_ip`로 바꾸고 `update ip`를 누른다. EIP는 고정이므로 갱신 스크립트는 필요 없다.
+
+```bash
+dig +short sangsokjadeul.duckdns.org   # terraform 출력 public_ip와 같아야 한다
+```
+
+무료 계정이라 몇 달간 갱신 요청이 없으면 이름이 회수된다. 오래 내려둔 뒤 다시 쓸 때는 위 명령으로 먼저 확인한다.
 
 ### 3. 시크릿 등록
 
@@ -64,7 +70,7 @@ aws ssm put-parameter --name $P/AI_PROVIDER --type String --value mock
 aws ssm put-parameter --name $P/AI_API_KEY --type SecureString --value "<OpenAI 키>"
 aws ssm put-parameter --name $P/AI_MODEL --type String --value gpt-4.1-nano
 aws ssm put-parameter --name $P/S3_BUCKET --type String --value "<버킷 이름>"
-aws ssm put-parameter --name $P/DOMAIN --type String --value "<서브도메인>.duckdns.org"
+aws ssm put-parameter --name $P/DOMAIN --type String --value sangsokjadeul.duckdns.org
 aws ssm put-parameter --name $P/BACKEND_IMAGE --type String --value ghcr.io/<owner>/<repo>/backend:latest
 aws ssm put-parameter --name $P/FRONTEND_IMAGE --type String --value ghcr.io/<owner>/<repo>/frontend:latest
 ```
@@ -84,13 +90,20 @@ cd /opt/sangsok
 EMAIL=you@example.com ./deploy/bootstrap-tls.sh   # 최초 1회, 인증서 발급
 ```
 
+인증서 발급 전에 두 가지를 먼저 확인한다. 순서를 어기면 Let's Encrypt 소유 확인이 실패한다.
+
+```bash
+dig +short sangsokjadeul.duckdns.org        # public_ip와 일치
+curl -I http://sangsokjadeul.duckdns.org/   # 80번이 EC2 nginx에 닿는다
+```
+
 이후 재배포는 `./deploy/deploy.sh` 한 줄이다. 인증서 갱신은 certbot 컨테이너가 12시간마다 시도하고,
 Nginx는 6시간마다 reload해서 갱신된 인증서를 다시 읽는다.
 
 ### 확인
 
 ```bash
-curl -fsS https://<도메인>/api/actuator/health
+curl -fsS https://sangsokjadeul.duckdns.org/api/actuator/health
 ```
 
 ## 운영 배포 원칙
