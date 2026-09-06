@@ -1,0 +1,10 @@
+export type Heir={displayName:string;relationship:string;minor:boolean}
+export type CaseInfo={id:number;deceasedDisplayName:string;deathDate:string;awarenessDate:string;awarenessDateCertain:boolean;relationship:string;inquiryStatus:string;minorHeirExists:boolean;willExists:boolean;completedProcedures:string;roadmapDirty:boolean;roadmapUpdatedAt:string;heirCandidates:Heir[]}
+export type AnalysisItem={institution:string;category:string;assetOrDebt:string;amount:number|null;amountStatus:string;referenceDate:string|null;confidence:number;evidenceText:string}
+export type Analysis={documentType:string;items:AnalysisItem[];warnings:string[]}
+export type DocumentItem={id:number;name:string;mimeType:string;sizeBytes:number;status:string;uploadedAt:string;analysis?:Analysis;error?:string}
+export type FinancialItem={id:number;assetOrDebt:string;itemType:string;institution:string;amount:number|null;amountStatus:string;referenceDate?:string;memo?:string;sourceDocumentId?:number;confidence?:number;evidenceText?:string}
+export type Step={id:number;stepKey:string;title:string;purpose:string;sequenceNo:number;status:string;deadline?:string;deadlineStatus:string;dDay?:number;institution:string;requiredDocuments:string;instructions:string;cautions:string;officialUrl:string;expertRecommended:boolean;progressStatus?:string;resultDate?:string;memo?:string}
+export type ChatCandidate={label:string;description:string;navigationTarget:string;targetId?:number}
+export type ChatReply={message:string;intent:string;navigationTarget?:string;targetId?:number;buttonLabel?:string;requiresConfirmation:boolean;riskLevel:string;sourceLinks:string[];candidates:ChatCandidate[]}
+export type RoadmapChanges={added:string[];removed:string[];carriedOver:string[];deadlineChanged:{stepKey:string;title:string;before:string;beforeStatus:string;after:string;afterStatus:string}[]}

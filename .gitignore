@@ -1,4 +1,6 @@
 node_modules/
+backend/data/
+.maven-cache/
 dist/
 target/
 .env
@@ -9,3 +11,9 @@ target/
 .DS_Store
 Thumbs.db
 uploads/
+
+# terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/.terraform.lock.hcl
