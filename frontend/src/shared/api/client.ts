@@ -1,4 +1,8 @@
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+export class ApiError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) { super(message); this.name = 'ApiError'; this.status = status }
+}
 
 // refresh token은 HttpOnly 쿠키에 있어 JS가 읽지 못한다. 갱신은 서버가 쿠키로만 판단한다.
 let refreshing: Promise<boolean> | null = null
@@ -33,7 +37,10 @@ async function request(path: string, options: RequestInit): Promise<Response> {
   // 만료된 access token은 한 번만 갱신하고 재시도한다. 실패하면 로그인 상태를 지운다.
   if (response.status === 401 && !path.startsWith('auth/')) {
     if (await refreshSession()) response = await send(path, options)
-    else localStorage.removeItem('accessToken')
+    else {
+      localStorage.removeItem('accessToken')
+      window.dispatchEvent(new Event('session-expired'))
+    }
   }
   return response
 }
@@ -42,7 +49,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   const response = await request(path, options)
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new Error(body?.detail || `요청에 실패했습니다. (${response.status})`)
+    throw new ApiError(body?.detail || `요청에 실패했습니다. (${response.status})`, response.status)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
