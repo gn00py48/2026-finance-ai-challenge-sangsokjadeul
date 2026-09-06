@@ -1,7 +1,8 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최신 인수인계 기준: 2026-09-07 Figma 전수 대조 및 UI 재작업 종료 시점.
-브랜치 `feat/spec-gaps`, `dev`(`40e2c6c`)에서 갈라져 나왔다. 작업은 커밋했고 `dev`로 PR을 열었다.
+1차 작업은 PR #13으로 `dev`에 병합됐다(병합 커밋 `44722b1`). 나머지 7개 화면의 좌표 대조 결과는
+브랜치 `fix/figma-coord-remaining`에서 PR #14로 열려 있으며 아직 병합 전이다.
 운영 배포는 하지 않았다. 아래 2026-09-06 절은 그 이전 작업 기록이며 이미 `dev`에 병합되어 있다.
 
 ## 최신 작업 요약 — 먼저 읽을 내용
@@ -472,10 +473,13 @@ D1은 카드 시작 y=77과 카드 간격 12px이 일치한다. H1은 제목 y=7
 
 ### 7. 이번 작업의 커밋
 
-- `4574aee` feat: Figma 대조 결과를 반영해 UI 재작업 — 화면 재작업, 디자인 토큰, 간격 수정
-- `6b4898c` docs: Figma 전수 대조 결과와 재작업 내역 기록 — `docs/figma-gap.md` 신규, 이 문서 갱신
-- `d2b941f` docs: HANDOFF 기준 시점을 이번 작업으로 갱신
-- `f4d214d` fix: 나머지 7개 화면의 좌표 대조 결과를 반영 — B1·F1·F2·G1·H2·B9·J1
+- `4574aee` feat: Figma 대조 결과를 반영해 UI 재작업 — 화면 재작업, 디자인 토큰, 간격 수정 (PR #13)
+- `6b4898c` docs: Figma 전수 대조 결과와 재작업 내역 기록 — `docs/figma-gap.md` 신규, 이 문서 갱신 (PR #13)
+- `d2b941f` docs: HANDOFF 기준 시점을 이번 작업으로 갱신 (PR #13)
+- `f4d214d` fix: 나머지 7개 화면의 좌표 대조 결과를 반영 — B1·F1·F2·G1·H2·B9·J1 (PR #14)
 
-`dev`를 대상으로 [PR #13](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/13)을 열었다.
-병합 시 CI가 GHCR 이미지를 만들지만 EC2 반영은 별개다. 운영 반영 절차는 `docs/deployment.md`와 `deploy/`를 따른다.
+앞의 두 커밋은 [PR #13](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/13)으로 `dev`에
+병합됐다. 뒤의 두 커밋은 병합 시점 이후에 만들어져 #13에 들어가지 못했고,
+[PR #14](https://github.com/gn00py48/2026-finance-ai-challenge-sangsokjadeul/pull/14)로 따로 열었다.
+
+`dev` push 시 CI가 GHCR 이미지를 만들지만 EC2 반영은 별개다. 운영 반영 절차는 `docs/deployment.md`와 `deploy/`를 따른다.
