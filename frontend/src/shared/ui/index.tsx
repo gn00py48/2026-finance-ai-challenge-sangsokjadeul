@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
 const legal = '본 서비스는 입력·업로드 정보를 기반으로 상속 절차를 정리하는 참고용 서비스입니다. 법률·세무 판단이나 기관의 공식 확인을 대신하지 않습니다.';
-export function Public({ children }: { children: ReactNode }) {
-  return <div className="public">{children}</div>;
+export function Public({ children, variant = 'onboarding' }: { children: ReactNode; variant?: 'login' | 'signup' | 'onboarding' }) {
+  return <div className={`public public--${variant}`}>{children}</div>;
 }
 export function Page({ k, t, d }: { k: string; t: string; d: string }) {
   return (
@@ -15,11 +15,11 @@ export function Page({ k, t, d }: { k: string; t: string; d: string }) {
 }
 export function Title({ k, t }: { k: string; t: string }) {
   return (
-    <>
+    <div className="onboarding-title">
       <p className="eyebrow">{k}</p>
       <h1>{t}</h1>
       <p className="sub">한 번 입력한 정보는 나중에 수정할 수 있어요.</p>
-    </>
+    </div>
   );
 }
 export function Field({
@@ -30,6 +30,7 @@ export function Field({
   change,
   defaultValue,
   required = true,
+  placeholder,
 }: {
   label: string;
   name?: string;
@@ -38,12 +39,14 @@ export function Field({
   change?: (v: string) => void;
   defaultValue?: string;
   required?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label>
       {label}
       <input
         required={required}
+        placeholder={placeholder}
         min={type === 'number' ? 0 : undefined}
         name={name}
         type={type}
@@ -108,13 +111,15 @@ export function Section({
   t,
   action,
   children,
+  className = '',
 }: {
   t: string;
   action?: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="section">
+    <section className={`section ${className}`}>
       <div className="row">
         <h2>{t}</h2>
         {action && (

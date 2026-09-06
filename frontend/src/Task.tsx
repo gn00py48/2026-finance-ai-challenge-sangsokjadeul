@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, jsonBody } from './shared/api/client';
 import type { FinancialItem, Step } from './shared/types';
-import { Banner, Error, Field, Loading, Page, Section, Status } from './shared/ui';
+import { Banner, Error, Field, Loading, Section, Status } from './shared/ui';
 import { Sheet } from './shared/ui/Sheet';
 
 export default function Task() {
@@ -16,15 +16,14 @@ export default function Task() {
   if (!q.data) return <Loading />;
   const s = q.data;
   return <>
-    <Page k={`로드맵 ${s.sequenceNo}단계`} t={s.title} d={s.purpose} />
-    <div className="row"><Status v={s.status} /><span className="status">{deadline(s)}</span></div>
+    <article className="card task-summary"><div className="badges"><Status v={s.status} /><span className="status needs_confirmation">{deadline(s)}</span>{s.expertRecommended && <span className="status">전문가 확인 권장</span>}</div><h2>{s.title}</h2><p className="muted">{s.purpose}</p></article>
     {saved && <Banner>처리 결과를 저장했습니다. 변경된 결과를 기준으로 다음 단계를 확인해 주세요.</Banner>}
-    <Section t="처리 순서"><article className="card"><p>{s.instructions}</p></article></Section>
-    <Section t="준비 서류"><article className="card"><p>{s.requiredDocuments}</p></article></Section>
-    <Section t="처리 기관"><article className="card"><p>{s.institution}</p></article></Section>
+    <Section className="detail-card" t="처리 순서"><p>{s.instructions}</p></Section>
+    <Section className="detail-card" t="필요 서류"><p>{s.requiredDocuments}</p></Section>
+    <Section className="detail-card" t="처리 기관"><p>{s.institution}</p></Section>
     <Section t="주의사항"><Banner>{s.cautions}</Banner>{s.expertRecommended && <p className="expert">중요한 결정은 전문가 확인을 권합니다.</p>}{s.officialUrl && /^https?:\/\//.test(s.officialUrl) && <a className="secondary official-link" href={s.officialUrl} target="_blank" rel="noreferrer">공식 안내 열기 ↗</a>}</Section>
     {s.progressStatus && <Section t="저장된 처리 결과"><article className="card"><p>{progressLabels[s.progressStatus] || s.progressStatus}</p><p>{s.resultDate || '처리일 미입력'}</p>{s.memo && <p>{s.memo}</p>}</article></Section>}
-    <div className="actions"><button className="secondary" onClick={() => history.back()}>돌아가기</button><button className="primary" onClick={() => setOpen(true)}>{s.progressStatus ? '처리 결과 수정' : '처리 결과 입력'}</button></div>
+    <div className="page-footer"><button className="primary" onClick={() => setOpen(true)}>{s.progressStatus ? '처리 결과 수정' : '처리 결과 입력하기'}</button></div>
     {open && <ResultForm step={s} needsReview={s.stepKey === 'VERIFY_INFORMATION' && (!items.data || items.data.some(x => x.amountStatus === 'NEEDS_CONFIRMATION'))} close={() => setOpen(false)} saved={async () => { setOpen(false); setSaved(true); await qc.invalidateQueries(); }} />}
   </>;
 }
@@ -45,7 +44,7 @@ function ResultForm({ step, close, saved, needsReview }: { step: Step; close: ()
       <label>메모 (선택)<textarea maxLength={1000} value={memo} onChange={e => setMemo(e.target.value)} /></label>
       <Banner>‘처리 완료’ 또는 ‘해당 없음’을 저장해야 단계가 완료됩니다. 이미 완료한 단계도 진행 중으로 변경할 수 있습니다.</Banner>
       {error && <Error>{error}</Error>}
-      <div className="actions"><button type="button" className="secondary" disabled={busy} onClick={close}>취소</button><button className="primary" disabled={busy}>{busy ? '저장 중…' : '결과 저장'}</button></div>
+      <div className="actions sheet-actions"><button type="button" className="secondary" disabled={busy} onClick={close}>취소</button><button className="primary" disabled={busy}>{busy ? '저장 중…' : '결과 저장'}</button></div>
     </form>
   </Sheet>;
 }

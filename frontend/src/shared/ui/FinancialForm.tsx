@@ -25,7 +25,7 @@ export function FinancialForm({ initial, save, cancel, showMemo = true }: { init
       <Field label="기준일" type="date" required={false} value={f.referenceDate ?? ''} change={referenceDate => setF({ ...f, referenceDate })} />
       {showMemo && <label>메모 (선택)<textarea maxLength={500} value={f.memo ?? ''} onChange={e => setF({ ...f, memo: e.target.value })} /></label>}
       {error && <Error>{error}</Error>}
-      <div className="actions"><button className="secondary" type="button" onClick={cancel}>취소</button><button className="primary">{busy ? '저장 중…' : '저장'}</button></div>
+      <div className="actions sheet-actions"><button className="secondary" type="button" onClick={cancel}>취소</button><button className="primary">{busy ? '저장 중…' : '저장'}</button></div>
     </fieldset>
   </form>;
 }
