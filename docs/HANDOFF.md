@@ -135,4 +135,4 @@ cd backend
 - `frontend/src/App.tsx`, `frontend/src/index.css`, Router 구성
 - `package-lock.json`, `compose.yaml`, `README.md`
 
-새 DB 변경은 기존 `V1`을 수정하지 않고 `V2__...sql`부터 추가한다. 현재 변경은 기능별 커밋으로 분리할 수 있지만 사용자가 요청하지 않아 커밋하지 않았다.
+새 DB 변경은 기존 `V1`을 수정하지 않고 `V2__...sql`부터 추가한다.
