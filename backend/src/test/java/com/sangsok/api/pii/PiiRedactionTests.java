@@ -15,6 +15,7 @@ class PiiRedactionTests {
         assertThat(PiiPatterns.sensitiveRanges("기준일 2026-08-20")).isEmpty();
         assertThat(PiiPatterns.sensitiveRanges("잔액 12,000,000원")).isEmpty();
         assertThat(PiiPatterns.sensitiveRanges("계좌번호 9001011234567")).hasSize(1);
+        assertThat(PiiPatterns.sensitiveRanges("계좌 12-3456-78")).hasSize(1);
     }
 
     @Test void ocrTsvParsingKeepsWordRowsOnly(){

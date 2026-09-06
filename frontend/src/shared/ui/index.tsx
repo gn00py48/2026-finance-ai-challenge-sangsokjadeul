@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 const legal = '본 서비스는 입력·업로드 정보를 기반으로 상속 절차를 정리하는 참고용 서비스입니다. 법률·세무 판단이나 기관의 공식 확인을 대신하지 않습니다.';
-export function Public({ children, variant = 'onboarding' }: { children: ReactNode; variant?: 'login' | 'signup' | 'onboarding' }) {
+export function Public({ children, variant = 'onboarding' }: { children: ReactNode; variant?: 'splash' | 'login' | 'signup' | 'onboarding' }) {
   return <div className={`public public--${variant}`}>{children}</div>;
 }
 export function Page({ k, t, d }: { k?: string; t: string; d: string }) {
