@@ -5,6 +5,7 @@ import com.sangsok.api.domain.Enums.*;
 import com.sangsok.api.domain.Models.*;
 import com.sangsok.api.repository.*;
 import jakarta.validation.Valid;
+import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.*;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 @RestController
+@Transactional
 public class FinancialController {
     private final FinancialItemRepository items; private final CaseService access; private final CaseRepository cases;
     public FinancialController(FinancialItemRepository items,CaseService access,CaseRepository cases){this.items=items;this.access=access;this.cases=cases;}

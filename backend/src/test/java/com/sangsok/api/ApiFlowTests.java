@@ -60,6 +60,66 @@ class ApiFlowTests {
         mvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken",fresh))).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/auth/refresh")).andExpect(status().isUnauthorized());
     }
+    @Test void reviewedZeroAmountOverridesLowAiConfidenceAndIsReturnedOnReload() throws Exception {
+        String auth = "Bearer " + signup("review");
+        long caseId = createCase(auth.substring(7), true);
+        long docId = mapper.readTree(mvc.perform(post("/api/cases/{id}/documents/sample", caseId)
+                .header("Authorization", auth)).andReturn().getResponse().getContentAsString()).get("id").asLong();
+        JsonNode analyzed = mapper.readTree(mvc.perform(post("/api/documents/{id}/analyze", docId)
+                .header("Authorization", auth)).andReturn().getResponse().getContentAsString()).get("analysis");
+        var reviewed = (com.fasterxml.jackson.databind.node.ObjectNode) analyzed.get("items").get(1);
+        reviewed.put("amount", 0);
+        reviewed.put("amountStatus", "CONFIRMED");
+        mvc.perform(patch("/api/documents/{id}/confirm", docId).header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(analyzed)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.analysis.items[1].amount").value(0))
+                .andExpect(jsonPath("$.analysis.items[1].amountStatus").value("CONFIRMED"));
+        JsonNode saved = mapper.readTree(mvc.perform(get("/api/cases/{id}/financial-items", caseId)
+                .header("Authorization", auth)).andReturn().getResponse().getContentAsString());
+        JsonNode corrected = java.util.stream.StreamSupport.stream(saved.spliterator(), false)
+                .filter(item -> item.get("institution").asText().equals(reviewed.get("institution").asText()))
+                .findFirst().orElseThrow();
+        assertThat(corrected.get("amount").decimalValue()).isEqualByComparingTo("0");
+        assertThat(corrected.get("amountStatus").asText()).isEqualTo("CONFIRMED");
+        mvc.perform(get("/api/documents/{id}", docId).header("Authorization", auth))
+                .andExpect(jsonPath("$.analysis.items[1].amount").value(0));
+    }
+
+    @Test void deathDateChangeRequiresRoadmapRecalculation() throws Exception {
+        String token = signup("death");
+        long id = createCase(token, true);
+        String auth = "Bearer " + token;
+        mvc.perform(post("/api/cases/{id}/roadmaps", id).header("Authorization", auth));
+        var body = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(mvc.perform(get("/api/cases/{id}", id)
+                .header("Authorization", auth)).andReturn().getResponse().getContentAsString());
+        body.put("deathDate", "2026-07-15");
+        mvc.perform(patch("/api/cases/{id}", id).header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(body)))
+                .andExpect(jsonPath("$.roadmapImpact").value(true))
+                .andExpect(jsonPath("$.case.roadmapDirty").value(true));
+    }
+
+    @Test void financialAmountCanBeConfirmedAndDeletedAcrossRequests() throws Exception {
+        String token = signup("amountqa"), auth = "Bearer " + token;
+        long id = createCase(token, true);
+        String unknown = "{\"assetOrDebt\":\"DEBT\",\"itemType\":\"LOAN\",\"institution\":\"QA bank\",\"amountStatus\":\"NEEDS_CONFIRMATION\"}";
+        long itemId = mapper.readTree(mvc.perform(post("/api/cases/{id}/financial-items", id)
+                .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON).content(unknown))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("id").asLong();
+        mvc.perform(post("/api/cases/{id}/roadmaps", id).header("Authorization", auth)).andExpect(status().isOk());
+        String confirmed = "{\"assetOrDebt\":\"DEBT\",\"itemType\":\"LOAN\",\"institution\":\"QA bank\",\"amountStatus\":\"CONFIRMED\",\"amount\":1200000}";
+        mvc.perform(patch("/api/financial-items/{id}", itemId).header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content(confirmed)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(1200000));
+        mvc.perform(get("/api/cases/{id}/financial-items", id).header("Authorization", auth))
+                .andExpect(jsonPath("$[0].amountStatus").value("CONFIRMED"));
+        mvc.perform(get("/api/cases/{id}", id).header("Authorization", auth))
+                .andExpect(jsonPath("$.roadmapDirty").value(true));
+        mvc.perform(delete("/api/financial-items/{id}", itemId).header("Authorization", auth)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/cases/{id}/financial-items", id).header("Authorization", auth))
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
     private static String cookie(String setCookie){return setCookie.substring(setCookie.indexOf('=')+1,setCookie.indexOf(';'));}
 
     @Test void documentOriginalIsServedToOwnerOnlyAndDeletableByOwner()throws Exception{
