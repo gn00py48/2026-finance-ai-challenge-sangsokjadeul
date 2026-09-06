@@ -290,7 +290,7 @@ function Shell({ children }: { children: ReactNode }) {
             내 정보
           </button>
         </nav>
-        </> : <><button className="back" aria-label="메인으로 돌아가기" onClick={() => { if (!unsavedForm.dirty || confirm('저장하지 않은 변경이 있습니다. 이동할까요?')) nav(`/cases/${p.caseId}/dashboard`); }}>←</button><h1>{titles[screen]}</h1>{screen === 'info' && <button className="link header-action" onClick={() => nav(`/cases/${p.caseId}/edit`)}>수정</button>}</>}
+        </> : <><button className="back" aria-label="메인으로 돌아가기" onClick={() => { if (!unsavedForm.dirty || confirm('저장하지 않은 변경이 있습니다. 이동할까요?')) nav(`/cases/${p.caseId}/dashboard`); }}>←</button><h1>{titles[screen]}</h1>{screen === 'info' && <button className="link header-action" onClick={() => nav(`/cases/${p.caseId}/edit`)}>수정</button>}{screen === 'roadmap' && <RoadmapCount />}</>}
       </header>
       <main>
         {children}
@@ -299,6 +299,16 @@ function Shell({ children }: { children: ReactNode }) {
       {!['task', 'edit', 'documents', 'upload'].includes(screen) && <Chat />}
     </div>
   );
+}
+
+// Figma C3 헤더 우측의 진행 표기. 로드맵 화면에서만 쓴다.
+function RoadmapCount() {
+  const p = useParams();
+  const q = useQuery({ queryKey: ['roadmap', p.caseId], queryFn: () => apiRequest<{ steps: Step[] }>(`cases/${p.caseId}/roadmaps/current`), retry: false });
+  const steps = q.data?.steps;
+  if (!steps?.length) return null;
+  const current = steps.findIndex(s => s.status === 'CURRENT' || s.status === 'RECHECK_REQUIRED');
+  return <span className="muted header-action">{current < 0 ? steps.length : current + 1} / {steps.length}</span>;
 }
 
 function Dashboard() {
@@ -611,9 +621,11 @@ function ReviewEditor({ document, saved }: { document: DocumentItem; saved: () =
   </div>;
 }
 
+// Figma C3. 가로 캐러셀 + 단계 상태 범례 + 세로 목록.
 function Roadmap() {
   const p = useParams(),
     nav = useNavigate();
+  const roadRef = useRef<HTMLDivElement>(null);
   const q = useQuery({
     queryKey: ["roadmap", p.caseId],
     queryFn: () =>
@@ -621,33 +633,51 @@ function Roadmap() {
     retry: false,
   });
   if (q.isPending) return <Loading />;
+  if (q.isError)
+    return <Error>{q.error.message}<button className="link" onClick={() => nav(`/cases/${p.caseId}/dashboard`)}>메인에서 로드맵 준비하기</button></Error>;
+  const steps = q.data?.steps ?? [];
   return (
     <>
-      <Page
-        k="맞춤 로드맵"
-        t="필요한 절차를 순서대로"
-        d={`처리 결과를 저장해야 다음 단계가 열립니다.${q.data ? ` (버전 ${q.data.version})` : ""}`}
-      />
-      {q.data?.steps.map((s) => (
-        <button
-          className="step"
-          key={s.id}
-          onClick={() => nav(`/cases/${p.caseId}/tasks/${s.id}`)}
-        >
-          <b>{s.sequenceNo}</b>
-          <div>
-            <Status v={s.status} />
-            <h3>{s.title}</h3>
-            <p>{deadline(s)}</p>
+      <article className="card road-carousel-card">
+        <div className="road-carousel"><button className="road-arrow" aria-label="이전 단계 보기" onClick={() => roadRef.current?.scrollBy({ left: -(roadRef.current.clientWidth), behavior: 'smooth' })}>‹</button><div className="road" ref={roadRef}>
+          {steps.map(s => (
+            <button key={s.id} className={`road-node road-node--${s.status.toLowerCase()}`} onClick={() => nav(`/cases/${p.caseId}/tasks/${s.id}`)}>
+              <b aria-label={`${s.sequenceNo}단계 ${STEP_STATE[s.status] ?? s.status}`} />
+              <span>{s.title}</span>
+            </button>
+          ))}
+        </div><button className="road-arrow" aria-label="다음 단계 보기" onClick={() => roadRef.current?.scrollBy({ left: roadRef.current.clientWidth, behavior: 'smooth' })}>›</button></div>
+        <div className="road-dots" aria-hidden="true">{steps.map(s => <i key={s.id} className={s.status === 'CURRENT' ? 'on' : ''} />)}</div>
+      </article>
+      <Section t="단계 상태">
+        {[['completed', '완료', '결과를 입력해 완료 조건을 충족한 단계'], ['current', '현재', '지금 처리해야 하는 단계 (1개만 존재)'], ['upcoming', '예정', '선행 단계가 끝나야 열리는 단계']].map(([key, label, desc]) => (
+          <div className="road-state" key={key}>
+            <i className={`road-dot road-dot--${key}`} aria-hidden="true" />
+            <div><b>{label}</b><p>{desc}</p></div>
           </div>
-        </button>
-      ))}
-      {q.isError && (
-        <Error>{q.error.message}<button className="link" onClick={() => nav(`/cases/${p.caseId}/dashboard`)}>메인에서 로드맵 준비하기</button></Error>
-      )}
+        ))}
+      </Section>
+      <Banner><b>단계는 직접 클릭만으로 완료되지 않습니다</b>각 단계의 “처리 결과”를 입력해 완료 조건을 충족해야 완료로 바뀌고 다음 단계가 열립니다.</Banner>
+      <article className="card road-list">
+        {steps.map(s => (
+          <button className="row road-row" key={s.id} onClick={() => nav(`/cases/${p.caseId}/tasks/${s.id}`)}>
+            <span><b>{s.sequenceNo}  {s.title}</b><small className="muted">{stepCaption(s)}</small></span>
+            <span className="badges"><Status v={s.status} /><span className="road-row-arrow" aria-hidden="true">›</span></span>
+          </button>
+        ))}
+      </article>
     </>
   );
 }
+const STEP_STATE: Record<string, string> = { COMPLETED: '완료', CURRENT: '현재', UPCOMING: '예정', RECHECK_REQUIRED: '재확인 필요' };
+// Figma C3의 행 부제. 완료는 처리일, 현재는 기한과 진행 상태, 나머지는 기한 상태를 보여준다.
+function stepCaption(s: Step) {
+  if (s.status === 'COMPLETED') return s.resultDate ? `완료 ${new Date(s.resultDate).toLocaleDateString('ko-KR')}` : '완료';
+  if (s.deadlineStatus === 'NEEDS_CONFIRMATION') return '기산일 확정 후 계산';
+  const progress = s.progressStatus ? ` · ${STEP_PROGRESS[s.progressStatus] ?? s.progressStatus}` : '';
+  return `${deadline(s)}${progress}`;
+}
+const STEP_PROGRESS: Record<string, string> = { CHECKING: '확인 중', BEFORE_APPLICATION: '신청 전', IN_PROGRESS: '처리 중', COMPLETED: '처리 완료', NOT_APPLICABLE: '해당 없음' };
 
 function Info() {
   const p = useParams(),
