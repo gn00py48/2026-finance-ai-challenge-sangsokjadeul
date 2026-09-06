@@ -8,12 +8,13 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { apiRequest, jsonBody } from "./shared/api/client";
+import { apiBlob, apiRequest, jsonBody } from "./shared/api/client";
 import type {
   CaseInfo,
   ChatReply,
   DocumentItem,
   FinancialItem,
+  RoadmapChanges,
   Step,
 } from "./shared/types";
 
@@ -611,6 +612,18 @@ function Documents() {
               분석 재시도
             </button>
           )}
+          <div className="item-actions">
+            <button className="link" onClick={async () => {
+              const url = URL.createObjectURL(await apiBlob(`documents/${d.id}/file`));
+              window.open(url, "_blank", "noopener");
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            }}>원본 보기</button>
+            <button className="danger" onClick={async () => {
+              if (!window.confirm(`${d.name} 원본을 삭제할까요? 확정한 재산·채무 항목은 그대로 남고 출처 표시만 사라집니다.`)) return;
+              await apiRequest(`documents/${d.id}`, { method: "DELETE" });
+              qc.invalidateQueries({ queryKey: ["docs", p.caseId] });
+            }}>원본 삭제</button>
+          </div>
         </article>
       ))}
       <button
@@ -771,7 +784,7 @@ function Roadmap() {
   const q = useQuery({
     queryKey: ["roadmap", p.caseId],
     queryFn: () =>
-      apiRequest<{ steps: Step[] }>(`cases/${p.caseId}/roadmaps/current`),
+      apiRequest<{ steps: Step[]; version: number }>(`cases/${p.caseId}/roadmaps/current`),
     retry: false,
   });
   return (
@@ -779,7 +792,7 @@ function Roadmap() {
       <Page
         k="맞춤 로드맵"
         t="필요한 절차를 순서대로"
-        d="처리 결과를 저장해야 다음 단계가 열립니다."
+        d={`처리 결과를 저장해야 다음 단계가 열립니다.${q.data ? ` (버전 ${q.data.version})` : ""}`}
       />
       {q.data?.steps.map((s) => (
         <button
@@ -941,6 +954,16 @@ function Info() {
   );
 }
 
+function describeChanges(version: number, c: RoadmapChanges) {
+  const lines = [`로드맵 버전 ${version}으로 다시 계산했습니다.`];
+  if (c.carriedOver.length) lines.push(`이전 처리 결과 ${c.carriedOver.length}건을 그대로 이어받았습니다.`);
+  if (c.added.length) lines.push(`추가된 단계: ${c.added.length}건`);
+  if (c.removed.length) lines.push(`빠진 단계: ${c.removed.length}건`);
+  for (const d of c.deadlineChanged)
+    lines.push(`기한 변경 · ${d.title}: ${d.beforeStatus === "CALCULATED" ? d.before : "확인 필요"} → ${d.afterStatus === "CALCULATED" ? d.after : "확인 필요"}`);
+  return lines.join("\n");
+}
+
 function Edit() {
   const p = useParams(),
     nav = useNavigate(),
@@ -968,10 +991,13 @@ function Edit() {
       if (
         r.roadmapImpact &&
         confirm(`${r.impactSummary}\n로드맵을 다시 계산할까요?`)
-      )
-        await apiRequest(`cases/${p.caseId}/roadmaps/recalculate`, {
-          method: "POST",
-        });
+      ) {
+        const next = await apiRequest<{ version: number; changes: RoadmapChanges }>(
+          `cases/${p.caseId}/roadmaps/recalculate`,
+          { method: "POST" },
+        );
+        alert(describeChanges(next.version, next.changes));
+      }
       nav(`/cases/${p.caseId}/info`);
     } catch (x) {
       setError((x as Error).message);

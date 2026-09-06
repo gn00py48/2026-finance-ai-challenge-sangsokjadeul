@@ -1,0 +1,73 @@
+# EC2 단일 인스턴스 운영용. 이미지는 GHCR에서 pull하며 서버에서 빌드하지 않는다.
+# 문서 원본은 S3에 저장하므로 document 볼륨이 없다.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sangsok}
+      POSTGRES_USER: ${POSTGRES_USER:-sangsok}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sangsok} -d ${POSTGRES_DB:-sangsok}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ${BACKEND_IMAGE:?required}
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sangsok}
+      DB_USERNAME: ${POSTGRES_USER:-sangsok}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      STORAGE_TYPE: s3
+      S3_BUCKET: ${S3_BUCKET:?required}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-3600}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?required}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.prod.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot
+    # 갱신된 인증서를 6시간마다 다시 읽는다. certbot 컨테이너는 nginx를 reload할 수 없다.
+    command: /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # 12시간마다 갱신을 시도한다. 만료 30일 이내가 아니면 certbot이 아무것도 하지 않는다.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  postgres_data:
+  letsencrypt:
+  certbot_www:

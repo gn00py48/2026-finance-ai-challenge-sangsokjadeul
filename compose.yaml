@@ -25,6 +25,7 @@ services:
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sangsok}
       DB_USERNAME: ${POSTGRES_USER:-sangsok}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-local-change-me}
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
       STORAGE_PATH: /var/lib/sangsok/uploads
     volumes:
       - document_data:/var/lib/sangsok/uploads

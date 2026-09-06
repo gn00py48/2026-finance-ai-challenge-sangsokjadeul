@@ -1,8 +1,7 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최종 갱신: 2026-09-06  
-기준 브랜치: `dev`  
-주의: 아래 변경은 현재 작업 트리에 있으며 아직 커밋·push하지 않았다. 팀원이 시작할 때 원격 코드만 보고 판단하지 말고 반드시 로컬 `git status`를 먼저 확인한다.
+기준 브랜치: `dev` (MVP 머지 완료), 후속 작업 브랜치 `feature/storage-s3-safe-view`
 
 ## 작업 시작 체크리스트
 
@@ -38,17 +37,17 @@ git diff --stat
 | COMMON-03 | 상태·데이터 관리 | 부분 구현 | JPA 전 도메인 | 변경 영향 규칙 세분화 |
 | ONB-01 | 단계형 기본정보 | 완료 | `CaseController`, `/onboarding` | 완료 절차 입력 UI 고도화 |
 | ONB-02 | 파악 상태 선택 | 완료 | onboarding | 없음 |
-| ONB-03 | 문서 업로드 | 완료 | `DocumentController`, upload page | 원본 삭제 선택 기능 |
+| ONB-03 | 문서 업로드 | 완료 | `DocumentController`, upload page | 없음 (S3 저장, 사용자 삭제 지원) |
 | ONB-04 | AI 분석·검수·확정 | 완료 | `document`, `ai`, documents page | 운영 키를 사용한 라이브 호출 검증 |
 | ONB-05 | 직접 입력 | 완료 | `FinancialController`, financial page | 입력 UX 고도화 |
 | ONB-06 | 규칙 로드맵 생성 | 완료 | `RoadmapService` | 규칙 케이스 확대 |
 | MAIN-01~05 | 대시보드 | 완료 | dashboard page/API | 가로 로드맵 터치 UX 점검 |
-| INFO-01~04 | 내 상속 정보 | 부분 구현 | info/edit pages | 원본 문서 안전 보기 API |
+| INFO-01~04 | 내 상속 정보 | 완료 | info/edit pages, `GET /api/documents/{id}/file` | 없음 |
 | EDIT-01~02 | 통합 수정·영향 검사 | 완료 | edit/financial APIs | 영향 설명 세분화 |
 | TASK-01~03 | 단계 상세·결과·취소 | 완료 | roadmap controller/pages | 단계 유형별 결과 폼 세분화 |
 | WARN-01 | 전체 주의사항 | 부분 구현 | warning API/page | 필터 UI 및 공식 링크 관리 |
 | CHAT | AI 내비게이션 챗봇 | 완료 | `OpenAiChatService`, floating chat | 사건 요약 컨텍스트 확대 |
-| AUTH | 가입·로그인·JWT·소유권 | 완료 | `auth`, `SecurityConfig` | Refresh Token 회전·폐기 저장소 |
+| AUTH | 가입·로그인·JWT·소유권 | 완료 | `auth`, `SecurityConfig` | 없음 (refresh token 회전·폐기 구현) |
 
 `완료`는 현재 MVP 흐름이 API·DB·화면까지 연결된 상태를 뜻한다. 실제 기관 조회나 법률·세무 판단 기능은 요구사항상 구현 대상이 아니다.
 
