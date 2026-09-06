@@ -1,7 +1,10 @@
 # 개발 인수인계 및 현재 구현 상태
 
 최종 갱신: 2026-09-06  
-기준 브랜치: `dev` (MVP 머지 완료), 후속 작업 브랜치 `feature/storage-s3-safe-view`
+기준 브랜치: `dev`. PR #2(MVP)와 PR #3(S3·마스킹·refresh token·로드맵 이관·배포 구성)이 머지되었고,
+PR #4(배포 중 발견한 TLS 부트스트랩 수정)가 열려 있다.
+
+**운영 배포됨: https://sangsokjadeul.duckdns.org** — 상세는 아래 "운영 배포 현황".
 
 ## 작업 시작 체크리스트
 
@@ -24,9 +27,11 @@ git diff --stat
 - Backend: Java 17, Spring Boot 4.1.1, Maven, Spring MVC/Security/JPA, JWT, Flyway, PostgreSQL/H2
 - Frontend: React 19, TypeScript, Vite, React Router, TanStack Query, Tailwind CSS
 - AI: `AiDocumentAnalyzer`, `AiChatService` 인터페이스 아래 Mock/OpenAI 구현체 교체
-- 개발 저장소: 로컬 파일 시스템, 외부 공개 URL 없음
+- 개인정보: `pii` 패키지가 AI 전송 전 문서를 이미지로 재렌더링하고 주민등록번호·계좌번호를 픽셀 단위로 지운다
+- 문서 저장: `DocumentStorage` 인터페이스 아래 `local`(개발)과 `s3`(운영) 구현. `STORAGE_TYPE`으로 전환
+- 인증: access token(15분) + HttpOnly 쿠키의 refresh token(14일, 회전·폐기)
 - 로컬 통합 실행: Docker Compose + PostgreSQL + Nginx
-- 운영 설정: `prod` 프로필과 배포 플랫폼 Secret 사용
+- 운영: AWS 단일 EC2에 `compose.prod.yaml`. 시크릿은 SSM Parameter Store, 문서는 S3, 인증서는 Let's Encrypt
 
 ## 기능명세서 구현 현황
 
@@ -106,32 +111,90 @@ cd backend
 .\mvnw.cmd test
 ```
 
-- Backend: 10 tests passed
-- Frontend lint: passed
-- Frontend production build: passed
-- Docker Compose config validation: passed
-- Docker image build: Docker Desktop 엔진이 실행 중이지 않아 미완료 (`dockerDesktopLinuxEngine` 연결 불가)
-- 실제 OpenAI 네트워크 호출: 현재 머신에 `AI_API_KEY`가 없어 미실행
+- Backend: 17 tests passed (tesseract가 없는 환경에서는 마스킹 실동작 테스트 1개가 skip된다)
+- Frontend lint / production build: passed
+- Docker 이미지: GitHub Actions에서 linux/amd64·linux/arm64 빌드 후 GHCR push 성공
+- 마스킹 실동작: 렌더한 `900101-1234567`을 마스킹한 뒤 재-OCR에서 숫자가 사라지는 것 확인
+- 배포 검증: HTTPS 헬스체크 UP, HTTP→HTTPS 301, 로그인 200, refresh 쿠키 `Secure; HttpOnly; SameSite=Strict`
+- 실제 OpenAI 네트워크 호출: 미실행. 운영은 `AI_PROVIDER=mock`이고 `AI_API_KEY`는 자리표시자다
 - OpenAI 요청 계약: 로컬 가짜 HTTP 서버로 JSON Schema와 `store=false` 검증 통과
+
+JDK가 없는 환경에서는 CI와 같은 컨테이너로 검증한다.
+
+```bash
+cd backend
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app -v "$HOME/.m2":/var/maven/.m2 \
+  -e MAVEN_CONFIG=/var/maven/.m2 -e HOME=/var/maven \
+  maven:3.9.11-eclipse-temurin-17 mvn -B -Duser.home=/var/maven verify
+```
+
+## 운영 배포 현황
+
+| 항목 | 값 |
+| --- | --- |
+| 주소 | https://sangsokjadeul.duckdns.org |
+| AWS 계정 / 리전 | `245324547761` / `ap-northeast-2` |
+| EC2 | `i-05c15888efd92d75d` (t4g.small, arm64) |
+| 고정 IP | `3.35.82.92` (DuckDNS A 레코드가 이 값을 가리킨다) |
+| 문서 버킷 | `sangsokjadeul-documents-245324547761` (`documents/`), DB 백업은 `backups/` |
+| 인증서 | Let's Encrypt, 2026-12-05 만료. certbot 컨테이너가 12시간마다 갱신 시도, nginx는 6시간마다 reload |
+| 이미지 | `ghcr.io/gn00py48/2026-finance-ai-challenge-sangsokjadeul/{backend,frontend}:latest` (public) |
+
+인프라는 `infra/`의 Terraform으로 만들었다. 상태 파일 `infra/terraform.tfstate`는 Git에 없으므로
+만든 사람의 로컬에만 있다. 잃어버리면 `terraform destroy`로 정리할 수 없고 콘솔에서 수동으로 지워야 한다.
+
+### 운영 명령
+
+접속은 22번 포트 대신 SSM Session Manager를 쓴다.
+
+```bash
+aws ssm start-session --target i-05c15888efd92d75d   # AWS_PROFILE 지정 필요
+sudo -iu ubuntu && cd /opt/sangsok
+
+./deploy/deploy.sh                    # SSM에서 .env를 다시 만들고 이미지 pull 후 재기동
+docker compose -f compose.prod.yaml ps
+docker compose -f compose.prod.yaml logs -f backend
+```
+
+설정값은 SSM Parameter Store `/sangsok/*`에 있다. 바꾸려면 파라미터를 `--overwrite`로 갱신한 뒤
+`deploy.sh`를 다시 실행한다. 서버의 `.env`를 직접 고치면 다음 배포에서 덮어써진다.
+
+```bash
+aws ssm put-parameter --name /sangsok/AI_PROVIDER --overwrite --type String --value openai
+aws ssm put-parameter --name /sangsok/AI_API_KEY --overwrite --type SecureString --value "<키>"
+```
+
+### 비용
+
+월 약 $22. EC2 $15.18 + EBS 20GB $1.82 + 공인 IPv4 $3.65 + S3·전송 $0 수준.
+SSM 파라미터, Session Manager, 예산 알림, IAM, 보안그룹은 무료다.
+예산 알림은 월 $25의 80% 도달과 초과 예상 시 메일로 온다.
+쓰지 않는 기간에는 `terraform destroy`가 유일한 완전 정지 수단이다. 인스턴스만 stop하면 EBS와 IP 요금은 계속 나간다.
 
 ## 다음 우선순위
 
-1. 실제 OpenAI 키를 Secret으로 주입한 PDF/PNG 라이브 E2E 검증
-2. AI 전송 전 OCR 기반 주민번호·계좌번호 로컬 마스킹
-3. S3 호환 비공개 저장소와 원본 삭제 옵션
-4. Refresh Token 회전·로그아웃 폐기 구현
-5. 로드맵 재계산 시 이전 결과 이관 및 버전 비교
-6. 문서 원본 안전 보기, 주의사항 필터, 사건 컨텍스트 기반 챗봇 강화
-7. 배포 플랫폼 결정 후 HTTPS, CORS, 로그 마스킹, 백업·복구 검증
+1. **실문서로 마스킹 검증.** 은행 거래내역서 등 실제 계좌번호 표기가 있는 PDF로 `PiiPatterns`를 확인한다.
+   현재 규칙은 "구분자 포함 숫자 10자리 이상"이라 콤마 없는 10억 이상 금액이 함께 가려질 수 있다.
+   검증 전까지 운영은 `AI_PROVIDER=mock`으로 둔다.
+2. 마스킹 검증 후 OpenAI 실키로 전환하고 PDF/PNG 라이브 E2E 확인.
+3. 단계 유형별 결과 입력 폼. 현재 `resultText`가 "사용자 입력"으로 하드코딩되어 있다.
+4. WARN-01 주의사항 필터 UI와 공식 링크 관리, 챗봇 사건 컨텍스트 확대.
+5. 로그 마스킹, DB 백업 복구 리허설, 탈퇴·보존 정책 확정.
 
-운영 전 필수 차단 항목은 1~4이다. 특히 현재 OpenAI 모드는 동의된 원본 파일을 공급자에게 보내므로 실제 개인정보 사용 전 로컬 비식별화 파이프라인을 완성해야 한다.
+### 미해결 관찰
+
+`DemoDataConfig`에 `@Profile("!prod")`가 붙어 있고 운영 프로필이 `prod`인데도 `demo` 계정이 생성되었다.
+배포된 이미지에는 해당 어노테이션이 들어 있음을 확인했으나 원인은 규명하지 못했다.
+심사위원이 회원가입 없이 확인할 수 있도록 `demo` 계정은 의도적으로 유지하는 것이므로 동작 자체는 문제가 없다.
+정리한다면 어노테이션을 제거해 "운영에도 데모 계정을 둔다"는 의도를 코드에 드러내는 편이 낫다.
 
 ## 충돌 가능성이 높은 파일
 
 - `backend/pom.xml`, `application.properties`, `application-prod.properties`
-- `domain/Models.java`, `domain/Enums.java`, Flyway `V1__initial_schema.sql`
-- `auth/SecurityConfig.java`
-- `frontend/src/App.tsx`, `frontend/src/index.css`, Router 구성
-- `package-lock.json`, `compose.yaml`, `README.md`
+- `domain/Models.java`, `domain/Enums.java`, Flyway `V1__initial_schema.sql`, `V2__refresh_token.sql`
+- `auth/SecurityConfig.java`, `auth/AuthController.java`
+- `frontend/src/App.tsx`, `frontend/src/index.css`, `frontend/src/shared/api/client.ts`, Router 구성
+- `package-lock.json`, `compose.yaml`, `compose.prod.yaml`, `README.md`
+- `infra/*.tf`, `deploy/*` — 배포 중이면 서버 반영 여부까지 함께 확인한다
 
-새 DB 변경은 기존 `V1`을 수정하지 않고 `V2__...sql`부터 추가한다.
+새 DB 변경은 기존 마이그레이션을 수정하지 않고 `V3__...sql`부터 추가한다.
