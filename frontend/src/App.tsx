@@ -1,3 +1,10 @@
+import { deadline, itemLabels } from './shared/format';
+import Onboarding from './Onboarding';
+import Task from './Task';
+import Finances from './Finances';
+import { Sheet } from './shared/ui/Sheet';
+import { Public, Page, Field, Check, Section, Status, Warning, Metric, Banner, Disclaimer, Error, Loading, Empty, Fact } from './shared/ui';
+import { FinancialForm } from './shared/ui/FinancialForm';
 import {
   Navigate,
   Route,
@@ -8,7 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { apiBlob, apiRequest, jsonBody } from "./shared/api/client";
+import { ApiError, apiBlob, apiRequest, jsonBody } from "./shared/api/client";
 import type {
   CaseInfo,
   ChatReply,
@@ -18,8 +25,6 @@ import type {
   Step,
 } from "./shared/types";
 
-const legal =
-  "본 서비스는 입력·업로드 정보를 기반으로 상속 절차를 정리하는 참고용 서비스입니다. 법률·세무 판단이나 기관의 공식 확인을 대신하지 않습니다.";
 const caseId = () => localStorage.getItem("caseId");
 // 챗봇이 화면을 이동하기 전에 확인해야 하는 미저장 상태. 폼 화면이 켜고 끈다.
 const unsavedForm = { dirty: false };
@@ -49,6 +54,9 @@ const destination = (target: string, id?: number) => {
 };
 
 export default function App() {
+  const [expired, setExpired] = useState(false);
+  const nav = useNavigate(), qc = useQueryClient();
+  useEffect(() => { const listener = () => setExpired(true); window.addEventListener('session-expired', listener); return () => window.removeEventListener('session-expired', listener); }, []);
   const logged = Boolean(localStorage.getItem("accessToken"));
   const home = logged
     ? caseId()
@@ -56,7 +64,7 @@ export default function App() {
       : "/onboarding"
     : "/login";
   return (
-    <Routes>
+    <><Routes>
       <Route path="/login" element={<Auth />} />
       <Route path="/signup" element={<Auth signup />} />
       <Route
@@ -158,7 +166,7 @@ export default function App() {
         }
       />
       <Route path="*" element={<Navigate to={home} replace />} />
-    </Routes>
+    </Routes>{expired && <Sheet title="로그인이 만료되었어요" close={() => { setExpired(false); qc.clear(); nav('/login'); }}><p>정보를 안전하게 확인하려면 다시 로그인해 주세요.</p><button className="primary" onClick={() => { setExpired(false); qc.clear(); nav('/login'); }}>다시 로그인</button></Sheet>}</>
   );
 }
 function Guard({ children }: { children: ReactNode }) {
@@ -177,6 +185,9 @@ function Auth({ signup = false }: { signup?: boolean }) {
     e.preventDefault();
     setBusy(true);
     const f = new FormData(e.currentTarget);
+    if (signup && f.get('password') !== f.get('passwordConfirm')) {
+      setError('비밀번호가 일치하지 않습니다.'); setBusy(false); return;
+    }
     try {
       const r = await apiRequest<{
         accessToken: string;
@@ -191,6 +202,7 @@ function Auth({ signup = false }: { signup?: boolean }) {
       localStorage.setItem("accessToken", r.accessToken);
       if (r.activeCaseId)
         localStorage.setItem("caseId", String(r.activeCaseId));
+      else localStorage.removeItem('caseId');
       nav(
         r.activeCaseId ? `/cases/${r.activeCaseId}/dashboard` : "/onboarding",
       );
@@ -202,7 +214,7 @@ function Auth({ signup = false }: { signup?: boolean }) {
   }
   return (
     <Public>
-      <div className="mark">나침반</div>
+      <div className="mark"><img src={`${import.meta.env.BASE_URL}assets/compass.svg`} alt="상속 나침반" /></div>
       <p className="eyebrow">AI 상속 금융 내비게이터</p>
       <h1>
         상속, 무엇부터 할지
@@ -216,14 +228,15 @@ function Auth({ signup = false }: { signup?: boolean }) {
         <Field
           label="아이디"
           name="username"
-          defaultValue={signup ? "" : "demo"}
+          defaultValue=""
         />
         <Field
           label="비밀번호"
           name="password"
           type="password"
-          defaultValue={signup ? "" : "demo1234"}
+          defaultValue=""
         />
+        {signup && <Field label="비밀번호 확인" name="passwordConfirm" type="password" />}
         {error && <Error>{error}</Error>}
         <button className="primary" disabled={busy}>
           {busy ? "처리 중..." : signup ? "회원가입" : "로그인"}
@@ -245,134 +258,6 @@ function Auth({ signup = false }: { signup?: boolean }) {
   );
 }
 
-function Onboarding() {
-  const nav = useNavigate(),
-    [step, setStep] = useState(1),
-    [error, setError] = useState("");
-  const [form, setForm] = useState({
-    deceasedDisplayName: "고인",
-    deathDate: "2026-08-20",
-    awarenessDate: "2026-08-21",
-    awarenessDateCertain: true,
-    relationship: "자녀",
-    inquiryStatus: "RESULT_AVAILABLE",
-    minorHeirExists: false,
-    willExists: false,
-    completedProcedures: "",
-    heirCandidates: [],
-  });
-  async function create() {
-    try {
-      const c = await apiRequest<CaseInfo>("cases", {
-        method: "POST",
-        ...jsonBody(form),
-      });
-      localStorage.setItem("caseId", String(c.id));
-      nav(
-        form.inquiryStatus === "RESULT_AVAILABLE"
-          ? `/cases/${c.id}/documents/upload`
-          : `/cases/${c.id}/financial-items`,
-      );
-    } catch (x) {
-      setError((x as Error).message);
-    }
-  }
-  return (
-    <Public>
-      <Progress n={step} />
-      {step === 1 && (
-        <>
-          <Title k="기본 상황" t="먼저 사건 정보를 알려주세요" />
-          <div className="stack">
-            <Field
-              label="사망자 표시명"
-              value={form.deceasedDisplayName}
-              change={(v) => setForm({ ...form, deceasedDisplayName: v })}
-            />
-            <Field
-              label="사망일"
-              type="date"
-              value={form.deathDate}
-              change={(v) => setForm({ ...form, deathDate: v })}
-            />
-            <Field
-              label="상속개시 사실을 알게 된 날"
-              type="date"
-              value={form.awarenessDate}
-              change={(v) => setForm({ ...form, awarenessDate: v })}
-            />
-            <Check
-              checked={form.awarenessDateCertain}
-              change={(v) => setForm({ ...form, awarenessDateCertain: v })}
-            >
-              이 날짜가 확실해요
-            </Check>
-            <Field
-              label="사망자와의 관계"
-              value={form.relationship}
-              change={(v) => setForm({ ...form, relationship: v })}
-            />
-          </div>
-          <Bottom onClick={() => setStep(2)} />
-        </>
-      )}
-      {step === 2 && (
-        <>
-          <Title k="조건 확인" t="절차에 영향을 줄 정보를 확인할게요" />
-          <div className="stack choices">
-            <Choice
-              on={form.minorHeirExists}
-              click={() =>
-                setForm({ ...form, minorHeirExists: !form.minorHeirExists })
-              }
-            >
-              미성년 상속인 후보가 있어요
-            </Choice>
-            <Choice
-              on={form.willExists}
-              click={() => setForm({ ...form, willExists: !form.willExists })}
-            >
-              유언이 있어요
-            </Choice>
-            <Field
-              label="이미 완료한 절차 (선택)"
-              value={form.completedProcedures}
-              change={(v) => setForm({ ...form, completedProcedures: v })}
-            />
-          </div>
-          <Bottom onClick={() => setStep(3)} />
-        </>
-      )}
-      {step === 3 && (
-        <>
-          <Title k="재산·채무 파악" t="현재 자료 확인 상태는 어떤가요?" />
-          <div className="stack choices">
-            {[
-              ["BEFORE", "안심상속 조회 전"],
-              ["IN_PROGRESS", "조회 진행 중"],
-              ["RESULT_AVAILABLE", "조회 결과 보유"],
-              ["PARTIAL", "일부 정보만 알고 있음"],
-            ].map(([v, l]) => (
-              <Choice
-                key={v}
-                on={form.inquiryStatus === v}
-                click={() => setForm({ ...form, inquiryStatus: v })}
-              >
-                {l}
-              </Choice>
-            ))}
-          </div>
-          {error && <Error>{error}</Error>}
-          <button className="primary bottom" onClick={create}>
-            사건 만들고 계속
-          </button>
-        </>
-      )}
-      <Disclaimer />
-    </Public>
-  );
-}
-
 function Shell({ children }: { children: ReactNode }) {
   const p = useParams(),
     nav = useNavigate();
@@ -383,7 +268,7 @@ function Shell({ children }: { children: ReactNode }) {
           className="logo"
           onClick={() => nav(`/cases/${p.caseId}/dashboard`)}
         >
-          상속나침반
+          <img src={`${import.meta.env.BASE_URL}assets/compass.svg`} alt="" />상속 나침반
         </button>
         <nav>
           <button onClick={() => nav(`/cases/${p.caseId}/documents/upload`)}>
@@ -391,14 +276,6 @@ function Shell({ children }: { children: ReactNode }) {
           </button>
           <button onClick={() => nav(`/cases/${p.caseId}/info`)}>
             내 정보
-          </button>
-          <button onClick={async () => {
-            await apiRequest("auth/logout", { method: "POST" }).catch(() => undefined);
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("caseId");
-            nav("/login");
-          }}>
-            로그아웃
           </button>
         </nav>
       </header>
@@ -414,12 +291,16 @@ function Shell({ children }: { children: ReactNode }) {
 function Dashboard() {
   const p = useParams(),
     nav = useNavigate();
+  const [recalculate, setRecalculate] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [changes, setChanges] = useState('');
+  const qc = useQueryClient();
+  const items = useQuery({ queryKey: ['items', p.caseId], queryFn: () => apiRequest<FinancialItem[]>(`cases/${p.caseId}/financial-items`) });
   const q = useQuery({
     queryKey: ["dashboard", p.caseId],
     queryFn: () => apiRequest<any>(`cases/${p.caseId}/dashboard`),
     retry: false,
   });
   if (q.isLoading) return <Loading />;
+  if (q.isError && !(q.error instanceof ApiError && q.error.status === 404)) return <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>;
   if (q.isError)
     return (
       <Empty
@@ -428,13 +309,15 @@ function Dashboard() {
       >
         <button
           className="primary"
-          onClick={async () => {
-            await apiRequest(`cases/${p.caseId}/roadmaps`, { method: "POST" });
-            q.refetch();
+          disabled={busy} onClick={async () => {
+            setBusy(true); setError('');
+            try { await apiRequest(`cases/${p.caseId}/roadmaps`, { method: "POST" }); await qc.invalidateQueries(); }
+            catch (e) { setError((e as Error).message); } finally { setBusy(false); }
           }}
         >
           로드맵 생성
         </button>
+        {error && <Error>{error}</Error>}
       </Empty>
     );
   const d = q.data;
@@ -446,24 +329,25 @@ function Dashboard() {
         d="가장 먼저 할 일부터 차근차근 확인하세요."
       />
       {d.case.roadmapDirty && (
-        <Banner>중요 정보 변경으로 로드맵 재계산이 필요해요.</Banner>
+        <Banner>중요 정보 변경으로 로드맵 재계산이 필요해요.<button className="link" onClick={() => setRecalculate(true)}>변경 반영하기 →</button></Banner>
       )}
+      {changes && <Banner>{changes}</Banner>}
+      {recalculate && <Sheet title="로드맵을 다시 계산할까요?" busy={busy} close={() => setRecalculate(false)}><p>확정한 정보를 반영합니다. 같은 단계의 기존 처리 결과는 유지되며, 바뀐 단계와 기한을 안내합니다.</p>{error && <Error>{error}</Error>}<div className="actions"><button className="secondary" disabled={busy} onClick={() => setRecalculate(false)}>나중에</button><button className="primary" disabled={busy} onClick={async () => { setBusy(true); setError(''); try { const next = await apiRequest<{ version: number; changes: RoadmapChanges }>(`cases/${p.caseId}/roadmaps/recalculate`, { method: 'POST' }); setChanges(describeChanges(next.version, next.changes)); setRecalculate(false); await qc.invalidateQueries(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? '계산 중…' : '다시 계산'}</button></div></Sheet>}
       <Section t="지금 해야 할 일">
         {d.priorityTask?.id ? (
-          <button
+          <article
             className="hero"
-            onClick={() => nav(`/cases/${p.caseId}/tasks/${d.priorityTask.id}`)}
           >
-            <Status v={d.priorityTask.status} />
+            <div className="row"><Status v={d.priorityTask.status} /><span className="status needs_confirmation">{deadline(d.priorityTask)}</span></div>
             <h2>{d.priorityTask.title}</h2>
             <p>{d.priorityTask.purpose}</p>
-            <strong>{deadline(d.priorityTask)} · 처리 방법 보기 →</strong>
-          </button>
+            <div className="actions"><button className="primary" onClick={() => nav(`/cases/${p.caseId}/tasks/${d.priorityTask.id}`)}>처리 방법 보기</button><button className="secondary" onClick={() => nav(`/cases/${p.caseId}/roadmap`)}>다른 단계 보기</button></div>
+          </article>
         ) : (
           <p>필수 단계가 모두 완료되었습니다.</p>
         )}
       </Section>
-      <Section t="나의 로드맵">
+      <Section t="내 로드맵" action={() => nav(`/cases/${p.caseId}/roadmap`)}>
         <div className="road">
           {d.roadmap.map((s: Step) => (
             <button
@@ -476,7 +360,10 @@ function Dashboard() {
             </button>
           ))}
         </div>
+        <p className="muted">완료 · 현재 · 예정 — 처리 결과를 저장하면 다음 단계가 열립니다.</p>
+        <button className="link" onClick={() => setRecalculate(true)}>로드맵 다시 계산</button>
       </Section>
+      <Section t="먼저 확인할 것" action={() => nav(`/cases/${p.caseId}/financial-items`)}>{items.data?.filter(x => x.amountStatus === 'NEEDS_CONFIRMATION').map(x => <button className="card row" key={x.id} onClick={() => nav(`/cases/${p.caseId}/financial-items`)}><span>{x.institution || itemLabels[x.itemType]}<small className="muted"> · 금액 확인 필요</small></span><span aria-hidden="true">›</span></button>)}</Section>
       <div className="two">
         <Metric
           n={d.needsConfirmationCount}
@@ -507,9 +394,11 @@ function Upload() {
   const p = useParams(),
     nav = useNavigate(),
     [file, setFile] = useState<File>(),
+    [consent, setConsent] = useState(false),
     [msg, setMsg] = useState(""),
     [busy, setBusy] = useState(false);
   async function run(sample = false) {
+    setMsg('');
     setBusy(true);
     try {
       let d: DocumentItem;
@@ -519,6 +408,8 @@ function Upload() {
         });
       else {
         if (!file) throw new globalThis.Error("파일을 선택해 주세요.");
+        if (!consent) throw new globalThis.Error('AI 분석 동의가 필요합니다.');
+        if (file.size > 10 * 1024 * 1024) throw new globalThis.Error('10MB 이하 파일을 선택해 주세요.');
         const f = new FormData();
         f.append("file", file);
         d = await apiRequest(`cases/${p.caseId}/documents?aiConsent=true`, {
@@ -550,11 +441,11 @@ function Upload() {
         <b>{file?.name || "파일 선택"}</b>
         <span>원본은 공개 URL로 제공되지 않습니다.</span>
       </label>
-      <Check checked change={() => {}}>
+      <Check checked={consent} change={setConsent}>
         AI 분석을 위해 마스킹된 정보를 전송하는 데 동의합니다.
       </Check>
       {msg && <Error>{msg}</Error>}
-      <button className="primary" disabled={busy} onClick={() => run()}>
+      <button className="primary" disabled={busy || !file || !consent} onClick={() => run()}>
         {busy ? "업로드·분석 중..." : "업로드하고 분석"}
       </button>
       <button className="secondary" disabled={busy} onClick={() => run(true)}>
@@ -568,6 +459,8 @@ function Documents() {
   const p = useParams(),
     nav = useNavigate(),
     qc = useQueryClient();
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  async function action(run: () => Promise<unknown>) { setError(''); setBusy(true); try { await run(); await qc.invalidateQueries(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
   const q = useQuery({
     queryKey: ["docs", p.caseId],
     queryFn: () => apiRequest<DocumentItem[]>(`cases/${p.caseId}/documents`),
@@ -579,6 +472,8 @@ function Documents() {
         t="AI 추출 결과를 확인하세요"
         d="확정하기 전에는 재산·채무에 반영되지 않아요."
       />
+      {q.isPending && <Loading />}{q.isError && <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>}{error && <Error>{error}</Error>}
+      {q.data?.length === 0 && <Empty t="등록된 문서가 없어요" d="문서를 올리면 AI 분석 결과를 검토할 수 있습니다." />}
       {q.data?.map((d) => (
         <article className="card" key={d.id}>
           <div className="row">
@@ -590,11 +485,11 @@ function Documents() {
             <Banner key={x}>{x}</Banner>
           ))}
           {d.status === "NEEDS_REVIEW" && d.analysis ? (
-            <ReviewEditor document={d} saved={() => qc.invalidateQueries({ queryKey: ["docs", p.caseId] })} />
+            <ReviewEditor document={d} saved={() => qc.invalidateQueries()} />
           ) : d.analysis?.items.map((x, i) => (
             <div className="extract" key={i}>
               <span>
-                {x.assetOrDebt === "ASSET" ? "자산" : "채무"} · {x.category}
+                {x.assetOrDebt === "ASSET" ? "재산" : "채무"} · {itemLabels[x.category] || x.category}
               </span>
               <b>{x.institution}</b>
               <strong>
@@ -611,27 +506,27 @@ function Documents() {
           {d.status === "FAILED" && (
             <button
               className="secondary"
-              onClick={async () => {
+              disabled={busy} onClick={() => action(async () => {
                 await apiRequest(`documents/${d.id}/analyze`, {
                   method: "POST",
                 });
                 q.refetch();
-              }}
+              })}
             >
               분석 재시도
             </button>
           )}
           <div className="item-actions">
-            <button className="link" onClick={async () => {
+            <button className="link" disabled={busy} onClick={() => action(async () => {
               const url = URL.createObjectURL(await apiBlob(`documents/${d.id}/file`));
-              window.open(url, "_blank", "noopener");
+              const link = document.createElement('a'); link.href = url; link.download = d.name; link.click();
               setTimeout(() => URL.revokeObjectURL(url), 60000);
-            }}>원본 보기</button>
-            <button className="danger" onClick={async () => {
+            })}>원본 내려받기</button>
+            <button className="danger" disabled={busy} onClick={() => action(async () => {
               if (!window.confirm(`${d.name} 원본을 삭제할까요? 확정한 재산·채무 항목은 그대로 남고 출처 표시만 사라집니다.`)) return;
               await apiRequest(`documents/${d.id}`, { method: "DELETE" });
               qc.invalidateQueries({ queryKey: ["docs", p.caseId] });
-            }}>원본 삭제</button>
+            })}>원본 삭제</button>
           </div>
         </article>
       ))}
@@ -647,144 +542,22 @@ function Documents() {
 
 function ReviewEditor({ document, saved }: { document: DocumentItem; saved: () => void }) {
   const [analysis, setAnalysis] = useState(document.analysis!);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  useEffect(() => { unsavedForm.dirty = JSON.stringify(analysis) !== JSON.stringify(document.analysis); return () => { unsavedForm.dirty = false; }; }, [analysis, document.analysis]);
   async function confirm() {
-    await apiRequest(`documents/${document.id}/confirm`, { method: "PATCH", ...jsonBody(analysis) });
-    saved();
+    setBusy(true); setError('');
+    try { await apiRequest(`documents/${document.id}/confirm`, { method: "PATCH", ...jsonBody(analysis) }); saved(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <div className="review">{analysis.items.map((x, i) => <div className="extract" key={i}>
-    <span>{x.assetOrDebt === "ASSET" ? "자산" : "채무"} · {x.category} · 신뢰도 {Math.round((x.confidence || 0) * 100)}%</span>
-    <input aria-label="기관명" value={x.institution} onChange={e => setAnalysis({ ...analysis, items: analysis.items.map((v, n) => n === i ? { ...v, institution: e.target.value } : v) })} />
-    <input aria-label="금액" type="number" value={x.amount ?? ""} placeholder="금액 확인 필요" onChange={e => setAnalysis({ ...analysis, items: analysis.items.map((v, n) => n === i ? { ...v, amount: e.target.value ? Number(e.target.value) : null, amountStatus: e.target.value ? "CONFIRMED" : "NEEDS_CONFIRMATION" } : v) })} />
-    <small>{x.evidenceText}</small><button className="danger" onClick={() => setAnalysis({ ...analysis, items: analysis.items.filter((_, n) => n !== i) })}>이 항목 제외</button>
-  </div>)}<button className="primary" onClick={confirm}>수정 내용으로 확정</button></div>;
-}
-
-function Finances() {
-  const p = useParams(),
-    qc = useQueryClient(),
-    [error, setError] = useState("");
-  const q = useQuery({
-    queryKey: ["items", p.caseId],
-    queryFn: () =>
-      apiRequest<FinancialItem[]>(`cases/${p.caseId}/financial-items`),
-  });
-  const [f, setF] = useState({
-    assetOrDebt: "ASSET",
-    itemType: "DEPOSIT",
-    institution: "",
-    amount: "",
-    amountStatus: "CONFIRMED",
-    memo: "",
-  });
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await apiRequest(`cases/${p.caseId}/financial-items`, {
-        method: "POST",
-        ...jsonBody({
-          ...f,
-          amount: f.amountStatus === "CONFIRMED" ? Number(f.amount) : null,
-        }),
-      });
-      setF({ ...f, institution: "", amount: "" });
-      qc.invalidateQueries({ queryKey: ["items", p.caseId] });
-    } catch (x) {
-      setError((x as Error).message);
-    }
-  }
-  return (
-    <>
-      <Page
-        k="재산·채무"
-        t="알고 있는 항목을 등록하세요"
-        d="정확한 금액을 모르면 ‘확인 필요’로 남겨두세요."
-      />
-      <form className="card stack" onSubmit={add}>
-        <div className="seg">
-          <button
-            type="button"
-            className={f.assetOrDebt === "ASSET" ? "on" : ""}
-            onClick={() => setF({ ...f, assetOrDebt: "ASSET" })}
-          >
-            자산
-          </button>
-          <button
-            type="button"
-            className={f.assetOrDebt === "DEBT" ? "on" : ""}
-            onClick={() => setF({ ...f, assetOrDebt: "DEBT" })}
-          >
-            채무
-          </button>
-        </div>
-        <label>
-          유형
-          <select
-            value={f.itemType}
-            onChange={(e) => setF({ ...f, itemType: e.target.value })}
-          >
-            {[
-              "DEPOSIT",
-              "INSURANCE",
-              "STOCK",
-              "REAL_ESTATE",
-              "LOAN",
-              "CARD_DEBT",
-              "TAX",
-              "OTHER",
-            ].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
-        <Field
-          label="기관"
-          value={f.institution}
-          change={(v) => setF({ ...f, institution: v })}
-        />
-        <Field
-          label="금액"
-          type="number"
-          value={f.amount}
-          change={(v) => setF({ ...f, amount: v })}
-        />
-        <Check
-          checked={f.amountStatus === "NEEDS_CONFIRMATION"}
-          change={(v) =>
-            setF({ ...f, amountStatus: v ? "NEEDS_CONFIRMATION" : "CONFIRMED" })
-          }
-        >
-          금액 확인 필요
-        </Check>
-        {error && <Error>{error}</Error>}
-        <button className="primary">항목 추가</button>
-      </form>
-      {q.data?.map((x) => (
-        <article className="card item" key={x.id}>
-          <div>
-            <Status v={x.amountStatus} />
-            <h3>
-              {x.institution || "기관 미입력"} · {x.itemType}
-            </h3>
-            <p>
-              {x.amountStatus === "CONFIRMED"
-                ? `${Number(x.amount).toLocaleString()}원`
-                : "금액 확인 필요"}
-            </p>
-          </div>
-          <div className="item-actions"><button className="link" onClick={async () => {
-              const institution = prompt("기관명을 수정하세요", x.institution || "");
-              if (institution === null) return;
-              const amount = prompt("금액을 입력하세요. 모르면 비워두세요.", x.amount?.toString() || "");
-              await apiRequest(`financial-items/${x.id}`, { method: "PATCH", ...jsonBody({ assetOrDebt: x.assetOrDebt, itemType: x.itemType, institution, amount: amount ? Number(amount) : null, amountStatus: amount ? "CONFIRMED" : "NEEDS_CONFIRMATION", referenceDate: x.referenceDate, memo: x.memo }) });
-              qc.invalidateQueries({ queryKey: ["items", p.caseId] });
-            }}>수정</button><button className="danger" onClick={async () => {
-              await apiRequest(`financial-items/${x.id}`, { method: "DELETE" });
-              qc.invalidateQueries({ queryKey: ["items", p.caseId] });
-            }}>삭제</button></div>
-        </article>
-      ))}
-    </>
-  );
+    <span>{x.assetOrDebt === "ASSET" ? "재산" : "채무"} · {itemLabels[x.category] || x.category} · 신뢰도 {Math.round((x.confidence || 0) * 100)}%</span>
+    <div className="row"><h3>{x.institution || '기관 미입력'}</h3><button className="link" disabled={busy} onClick={() => setEditing(i)}>수정</button></div>
+    <strong>{x.amountStatus === 'CONFIRMED' && x.amount != null ? `${x.amount.toLocaleString()}원` : '금액 미확인'}</strong>
+    <small>{x.evidenceText}</small><button className="danger" disabled={busy} onClick={() => setAnalysis({ ...analysis, items: analysis.items.filter((_, n) => n !== i) })}>이 항목 제외</button>
+  </div>)}{error && <Error>{error}</Error>}<button className="primary" disabled={busy || !analysis.items.length} onClick={confirm}>{busy ? '확정 중…' : `${analysis.items.length}건 모두 확정하기`}</button>
+  {editing !== null && <Sheet title="항목 수정" close={() => setEditing(null)}><FinancialForm showMemo={false} initial={{ ...analysis.items[editing], itemType: analysis.items[editing].category, referenceDate: analysis.items[editing].referenceDate ?? undefined }} cancel={() => setEditing(null)} save={async data => { setAnalysis({ ...analysis, items: analysis.items.map((item, i) => i === editing ? { ...item, ...data, category: data.itemType } : item) }); setEditing(null); }} /></Sheet>}
+  </div>;
 }
 
 function Roadmap() {
@@ -796,6 +569,7 @@ function Roadmap() {
       apiRequest<{ steps: Step[]; version: number }>(`cases/${p.caseId}/roadmaps/current`),
     retry: false,
   });
+  if (q.isPending) return <Loading />;
   return (
     <>
       <Page
@@ -818,81 +592,8 @@ function Roadmap() {
         </button>
       ))}
       {q.isError && (
-        <button
-          className="primary"
-          onClick={async () => {
-            await apiRequest(`cases/${p.caseId}/roadmaps`, { method: "POST" });
-            q.refetch();
-          }}
-        >
-          로드맵 생성
-        </button>
+        <Error>{q.error.message}<button className="link" onClick={() => nav(`/cases/${p.caseId}/dashboard`)}>메인에서 로드맵 준비하기</button></Error>
       )}
-    </>
-  );
-}
-
-function Task() {
-  const p = useParams(),
-    nav = useNavigate(),
-    qc = useQueryClient();
-  const q = useQuery({
-      queryKey: ["task", p.taskId],
-      queryFn: () => apiRequest<Step>(`tasks/${p.taskId}`),
-    }),
-    s = q.data;
-  if (!s) return <Loading />;
-  async function save(progressStatus: string) {
-    await apiRequest(`tasks/${p.taskId}/result`, {
-      method: "PATCH",
-      ...jsonBody({
-        progressStatus,
-        resultDate: new Date().toISOString().slice(0, 10),
-        resultText: "사용자 입력",
-        memo: "",
-      }),
-    });
-    qc.invalidateQueries();
-    nav(`/cases/${p.caseId}/dashboard`);
-  }
-  return (
-    <>
-      <Page k={`로드맵 ${s.sequenceNo}단계`} t={s.title} d={s.purpose} />
-      <Status v={s.status} />
-      <Section t="처리 순서">
-        <p>{s.instructions}</p>
-      </Section>
-      <Section t="준비 서류">
-        <p>{s.requiredDocuments}</p>
-      </Section>
-      <Section t="처리 기관">
-        <p>{s.institution}</p>
-      </Section>
-      <Section t="참고 기한">
-        <p>{deadline(s)}</p>
-      </Section>
-      <Section t="주의사항">
-        <Banner>{s.cautions}</Banner>
-        {s.expertRecommended && (
-          <p className="expert">중요한 결정은 전문가 확인을 권합니다.</p>
-        )}
-        <a href={s.officialUrl} target="_blank" rel="noreferrer">
-          공식 안내 열기 ↗
-        </a>
-      </Section>
-      <div className="actions">
-        <button className="secondary" onClick={() => save("CHECKING")}>
-          확인 중
-        </button>
-        <button className="primary" onClick={() => save("COMPLETED")}>
-          처리 완료
-        </button>
-        {s.status === "COMPLETED" && (
-          <button className="danger" onClick={() => save("IN_PROGRESS")}>
-            완료 취소
-          </button>
-        )}
-      </div>
     </>
   );
 }
@@ -900,6 +601,7 @@ function Task() {
 function Info() {
   const p = useParams(),
     nav = useNavigate();
+  const qc = useQueryClient();
   const q = useQuery({
       queryKey: ["case", p.caseId],
       queryFn: () => apiRequest<CaseInfo>(`cases/${p.caseId}`),
@@ -914,6 +616,7 @@ function Info() {
       queryFn: () => apiRequest<DocumentItem[]>(`cases/${p.caseId}/documents`),
     }),
     c = q.data;
+  if (q.isError) return <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>;
   if (!c) return <Loading />;
   const sum = (kind: string) =>
     iq.data
@@ -937,7 +640,9 @@ function Info() {
           }
         />
         <Fact k="관계" v={c.relationship} />
-        <Fact k="자료 파악" v={c.inquiryStatus} />
+        <Fact k="자료 파악" v={{BEFORE:'조회 전', IN_PROGRESS:'조회 진행 중', RESULT_AVAILABLE:'조회 결과 보유', PARTIAL:'일부 정보 보유'}[c.inquiryStatus] || c.inquiryStatus} />
+        <Fact k="공동상속인 후보" v={c.heirCandidates?.map(h => `${h.displayName} (${h.relationship}${h.minor ? ', 미성년' : ''})`).join(', ') || '입력 없음'} />
+        <Fact k="유언" v={c.willExists ? '있음' : '입력 없음'} />
       </article>
       <div className="two">
         <Metric n={`${sum("ASSET").toLocaleString()}원`} l="확인 자산" />
@@ -946,6 +651,7 @@ function Info() {
       <article className="card">
         <h3>등록 상속자료</h3>
         <p>{dq.data?.length || 0}건</p>
+        {dq.data?.map(doc => <div className="row document-row" key={doc.id}><span>{doc.name}</span><Status v={doc.status} /></div>)}
         <button
           className="link"
           onClick={() => nav(`/cases/${p.caseId}/documents`)}
@@ -953,12 +659,14 @@ function Info() {
           문서 보기 →
         </button>
       </article>
+      <button className="secondary" onClick={() => nav(`/cases/${p.caseId}/financial-items`)}>재산·채무 상세 보기</button>
       <button
         className="primary"
         onClick={() => nav(`/cases/${p.caseId}/edit`)}
       >
         상속 정보 수정
       </button>
+      <button className="link" onClick={async () => { await apiRequest('auth/logout', { method: 'POST' }).catch(() => undefined); localStorage.removeItem('accessToken'); localStorage.removeItem('caseId'); qc.clear(); nav('/login'); }}>로그아웃</button>
     </>
   );
 }
@@ -977,6 +685,8 @@ function Edit() {
   const p = useParams(),
     nav = useNavigate(),
     [error, setError] = useState("");
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false), [impact, setImpact] = useState(false);
   useEffect(() => () => {
     unsavedForm.dirty = false;
   }, []);
@@ -984,6 +694,7 @@ function Edit() {
     queryKey: ["case", p.caseId],
     queryFn: () => apiRequest<CaseInfo>(`cases/${p.caseId}`),
   });
+  if (q.isError) return <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>;
   if (!q.data) return <Loading />;
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -991,30 +702,27 @@ function Edit() {
       body = {
         ...q.data,
         deceasedDisplayName: f.get("name"),
-        deathDate: f.get("death"),
-        awarenessDate: f.get("aware"),
+        deathDate: f.get("death") || null,
+        awarenessDate: f.get("aware") || null,
         awarenessDateCertain: f.get("certain") === "on",
+        relationship: f.get('relationship'),
+        minorHeirExists: f.get('minor') === 'on',
+        willExists: f.get('will') === 'on',
+        completedProcedures: f.get('completed'),
       };
+    setBusy(true); setError('');
     try {
       const r = await apiRequest<any>(`cases/${p.caseId}`, {
         method: "PATCH",
         ...jsonBody(body),
       });
-      if (
-        r.roadmapImpact &&
-        confirm(`${r.impactSummary}\n로드맵을 다시 계산할까요?`)
-      ) {
-        const next = await apiRequest<{ version: number; changes: RoadmapChanges }>(
-          `cases/${p.caseId}/roadmaps/recalculate`,
-          { method: "POST" },
-        );
-        alert(describeChanges(next.version, next.changes));
-      }
       unsavedForm.dirty = false;
-      nav(`/cases/${p.caseId}/info`);
+      await qc.invalidateQueries();
+      if (r.roadmapImpact || body.deathDate !== q.data?.deathDate) setImpact(true);
+      else nav(`/cases/${p.caseId}/info`);
     } catch (x) {
       setError((x as Error).message);
-    }
+    } finally { setBusy(false); }
   }
   return (
     <>
@@ -1030,6 +738,7 @@ function Edit() {
           unsavedForm.dirty = true;
         }}
       >
+        <div className="chips filters"><button type="button" aria-pressed="true">기본 정보</button><button type="button" onClick={() => { if (!unsavedForm.dirty || confirm('저장하지 않은 변경이 있습니다. 이동할까요?')) nav(`/cases/${p.caseId}/documents`); }}>등록 문서</button><button type="button" onClick={() => { if (!unsavedForm.dirty || confirm('저장하지 않은 변경이 있습니다. 이동할까요?')) nav(`/cases/${p.caseId}/financial-items`); }}>재산·채무</button></div>
         <Field
           label="사망자 표시명"
           name="name"
@@ -1038,12 +747,14 @@ function Edit() {
         <Field
           label="사망일"
           name="death"
+          required={false}
           type="date"
           defaultValue={q.data.deathDate}
         />
         <Field
           label="상속개시 사실을 안 날"
           name="aware"
+          required={false}
           type="date"
           defaultValue={q.data.awarenessDate}
         />
@@ -1055,9 +766,14 @@ function Edit() {
           />{" "}
           날짜가 확실해요
         </label>
+        <Field label="사망자와의 관계" name="relationship" defaultValue={q.data.relationship} />
+        <label className="check"><input name="minor" type="checkbox" defaultChecked={q.data.minorHeirExists} />미성년 상속인 후보가 있어요</label>
+        <label className="check"><input name="will" type="checkbox" defaultChecked={q.data.willExists} />유언이 있어요</label>
+        <Field label="이미 완료한 절차 (선택)" name="completed" required={false} defaultValue={q.data.completedProcedures} />
         {error && <Error>{error}</Error>}
-        <button className="primary">변경 저장</button>
+        <button className="primary" disabled={busy}>{busy ? '저장 중…' : '변경 저장'}</button>
       </form>
+      {impact && <Sheet title="상속 정보를 저장했어요" close={() => nav(`/cases/${p.caseId}/info`)}><p>기준 날짜와 조건의 변경은 단계·기한에 영향을 줄 수 있습니다. 로드맵에서 변경 내용을 반영해 주세요.</p><div className="actions"><button className="secondary" onClick={() => nav(`/cases/${p.caseId}/info`)}>나중에</button><button className="primary" onClick={() => nav(`/cases/${p.caseId}/dashboard`)}>로드맵 확인</button></div></Sheet>}
     </>
   );
 }
@@ -1065,6 +781,8 @@ function Edit() {
 function Warnings() {
   const p = useParams(),
     nav = useNavigate();
+  const [filter, setFilter] = useState('ALL');
+  const [selected, setSelected] = useState<any>(null);
   const q = useQuery({
     queryKey: ["warnings", p.caseId],
     queryFn: () => apiRequest<any[]>(`cases/${p.caseId}/warnings`),
@@ -1076,22 +794,26 @@ function Warnings() {
         t="지금 확인할 내용을 모았어요"
         d="위험도와 기한을 기준으로 정렬합니다."
       />
-      {q.data?.map((w) => (
+      <div className="chips filters" aria-label="주의사항 필터">{[['ALL', '전체'], ['CHECK_NOW', '지금 확인'], ['CURRENT_STEP', '현재 단계'], ['LATER_STEP', '이후 단계'], ['DEADLINE_RISK', '기한 위험'], ['MISSING_INFO', '정보 누락']].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
+      {q.isPending && <Loading />}
+      {q.isError && <Error>{q.error.message}<button className="link" onClick={() => q.refetch()}>다시 시도</button></Error>}
+      {q.data?.filter(w => filter === 'ALL' || w.category === filter).map((w) => (
         <button
           className="warning-button"
           key={w.id}
-          onClick={() => nav(destination(w.navigationTarget))}
+          onClick={() => setSelected(w)}
         >
           <Warning w={w} />
-          <span>관련 화면으로 이동 →</span>
+          <span>자세히 보기 →</span>
         </button>
       ))}
-      {q.data?.length === 0 && (
+      {q.data?.filter(w => filter === 'ALL' || w.category === filter).length === 0 && (
         <Empty
           t="현재 주의사항이 없어요"
           d="정보를 변경하면 다시 평가됩니다."
         />
       )}
+      {selected && <Sheet title={selected.title} close={() => setSelected(null)}><Warning w={selected} /><button className="primary" onClick={() => nav(destination(selected.navigationTarget))}>관련 화면으로 이동</button></Sheet>}
     </>
   );
 }
@@ -1137,18 +859,18 @@ function Chat() {
         aria-label="AI 챗봇"
         onClick={() => setOpen(true)}
       >
-        ✦
+        <img src={`${import.meta.env.BASE_URL}assets/chat.svg`} alt="" />
       </button>
       {open && (
-        <div className="backdrop" onClick={() => setOpen(false)}>
-          <section className="sheet" onClick={(e) => e.stopPropagation()}>
+        <Sheet title="무엇을 찾으세요?" close={() => setOpen(false)}>
+          <section className="chat-content">
             <div className="row">
               <div>
                 <p className="eyebrow">AI 내비게이터</p>
                 <h2>무엇을 찾고 있나요?</h2>
               </div>
-              <button className="close" onClick={() => setOpen(false)}>
-                닫기
+              <button className="link" onClick={() => { setReply(undefined); setInput(''); setHint(''); m.reset(); }}>
+                대화 지우기
               </button>
             </div>
             <div className="chips">
@@ -1183,7 +905,7 @@ function Chat() {
                 className={`bubble ${reply.riskLevel === "HIGH" ? "risk" : ""}`}
               >
                 <p>{reply.message}</p>
-                <small>위험도 {reply.riskLevel}</small>
+                {reply.riskLevel === 'HIGH' && <small>법률·세무 판단은 공식 안내 또는 전문가에게 확인해 주세요.</small>}
                 {reply.navigationTarget && (
                   <button
                     className="primary"
@@ -1215,225 +937,16 @@ function Chat() {
               }}
             >
               <input
+                aria-label="찾고 싶은 화면"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="예: 문서 어디서 올려?"
               />
-              <button disabled={m.isPending}>전송</button>
+              <button disabled={m.isPending || !input.trim()}>{m.isPending ? '찾는 중…' : '전송'}</button>
             </form>
           </section>
-        </div>
+        </Sheet>
       )}
     </>
-  );
-}
-
-function deadline(s: Step) {
-  return s.deadlineStatus === "NEEDS_CONFIRMATION"
-    ? "기한 확인 필요"
-    : s.dDay != null
-      ? `D-${s.dDay}`
-      : s.deadline || "참고 기한 없음";
-}
-function Public({ children }: { children: ReactNode }) {
-  return <div className="public">{children}</div>;
-}
-function Page({ k, t, d }: { k: string; t: string; d: string }) {
-  return (
-    <div className="page">
-      <p className="eyebrow">{k}</p>
-      <h1>{t}</h1>
-      <p className="sub">{d}</p>
-    </div>
-  );
-}
-function Title({ k, t }: { k: string; t: string }) {
-  return (
-    <>
-      <p className="eyebrow">{k}</p>
-      <h1>{t}</h1>
-      <p className="sub">한 번 입력한 정보는 나중에 수정할 수 있어요.</p>
-    </>
-  );
-}
-function Field({
-  label,
-  name,
-  type = "text",
-  value,
-  change,
-  defaultValue,
-}: {
-  label: string;
-  name?: string;
-  type?: string;
-  value?: string;
-  change?: (v: string) => void;
-  defaultValue?: string;
-}) {
-  return (
-    <label>
-      {label}
-      <input
-        required
-        name={name}
-        type={type}
-        value={value}
-        defaultValue={defaultValue}
-        onChange={change ? (e) => change(e.target.value) : undefined}
-      />
-    </label>
-  );
-}
-function Check({
-  checked,
-  change,
-  children,
-}: {
-  checked: boolean;
-  change: (v: boolean) => void;
-  children: ReactNode;
-}) {
-  return (
-    <label className="check">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => change(e.target.checked)}
-      />
-      {children}
-    </label>
-  );
-}
-function Choice({
-  on,
-  click,
-  children,
-}: {
-  on: boolean;
-  click: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button className={`choice ${on ? "on" : ""}`} onClick={click}>
-      {on ? "✓ " : "○ "}
-      {children}
-    </button>
-  );
-}
-function Progress({ n }: { n: number }) {
-  return (
-    <div className="progress">
-      <span style={{ width: `${(n / 3) * 100}%` }} />
-    </div>
-  );
-}
-function Bottom({ onClick }: { onClick: () => void }) {
-  return (
-    <button className="primary bottom" onClick={onClick}>
-      다음
-    </button>
-  );
-}
-function Section({
-  t,
-  action,
-  children,
-}: {
-  t: string;
-  action?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className="section">
-      <div className="row">
-        <h2>{t}</h2>
-        {action && (
-          <button className="link" onClick={action}>
-            전체 보기
-          </button>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
-function Status({ v }: { v: string }) {
-  const l: any = {
-    COMPLETED: "완료",
-    CURRENT: "현재",
-    UPCOMING: "예정",
-    RECHECK_REQUIRED: "재확인 필요",
-    CONFIRMED: "확정",
-    NEEDS_CONFIRMATION: "확인 필요",
-    UPLOADED: "업로드됨",
-    ANALYZING: "분석 중",
-    NEEDS_REVIEW: "검토 필요",
-    FAILED: "실패",
-  };
-  return <span className={`status ${v.toLowerCase()}`}>{l[v] || v}</span>;
-}
-function Warning({ w }: { w: any }) {
-  return (
-    <div className={`warning ${w.level.toLowerCase()}`}>
-      <b>{w.title}</b>
-      <p>{w.message}</p>
-      <small>
-        {w.category} · {w.level}
-      </small>
-    </div>
-  );
-}
-function Metric({
-  n,
-  l,
-  click,
-}: {
-  n: string | number;
-  l: string;
-  click?: () => void;
-}) {
-  return (
-    <button className="metric" onClick={click}>
-      <b>{n}</b>
-      <span>{l}</span>
-    </button>
-  );
-}
-function Banner({ children }: { children: ReactNode }) {
-  return <div className="banner">{children}</div>;
-}
-function Disclaimer() {
-  return <p className="disclaimer">{legal}</p>;
-}
-function Error({ children }: { children: ReactNode }) {
-  return <p className="error">{children}</p>;
-}
-function Loading() {
-  return <p className="loading">불러오는 중...</p>;
-}
-function Empty({
-  t,
-  d,
-  children,
-}: {
-  t: string;
-  d: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="empty">
-      <h2>{t}</h2>
-      <p>{d}</p>
-      {children}
-    </div>
-  );
-}
-function Fact({ k, v }: { k: string; v: string }) {
-  return (
-    <div>
-      <dt>{k}</dt>
-      <dd>{v}</dd>
-    </div>
   );
 }
